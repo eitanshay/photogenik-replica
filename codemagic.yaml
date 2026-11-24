@@ -1,7 +1,7 @@
 # Codemagic: builds the native frame iOS app (ios/) and uploads it to App Store Connect for TestFlight.
 # The web replica at the repo root (index.html) is untouched; this only runs when ios/ or this file changes.
 #
-# Before the first build, set APP_STORE_APPLE_ID (marked CHANGE ME) to the new app record's Apple ID (see ios/README.md, "First build").
+# App record: "frame ES-10" in App Store Connect (Apple ID below). Setup steps: ios/README.md, "First build".
 
 workflows:
   frame-ios-testflight:
@@ -17,7 +17,7 @@ workflows:
       vars:
         XCODE_PROJECT: "ios/Frame.xcodeproj"
         XCODE_SCHEME: "Frame"
-        APP_STORE_APPLE_ID: 0 # CHANGE ME: App Store Connect, the app, General, App Information, Apple ID
+        APP_STORE_APPLE_ID: 6838537177
       xcode: latest
     triggering:
       events:
