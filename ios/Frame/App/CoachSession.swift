@@ -77,6 +77,7 @@ final class CoachSession {
             permissionDenied = !ok
             guard ok else { return }
             let side: CameraSide = settings.mode == .selfie ? .front : .back
+            camera.setCaptureFeatures(live: settings.livePhotos, raw: settings.rawPhotos)
             camera.start(side: side)
             sensors.start()
             started = true
@@ -269,6 +270,24 @@ final class CoachSession {
         show(settings.handsFree ? "Hands-free: show an open palm for a 3 second timer" : "Hands-free off", tone: .neutral)
     }
 
+    func toggleLive() {
+        settings.livePhotos.toggle()
+        if settings.livePhotos { settings.rawPhotos = false }
+        camera.setCaptureFeatures(live: settings.livePhotos, raw: settings.rawPhotos)
+        show(settings.livePhotos ? "Live Photo on: one shot per press, no burst" : "Live Photo off", tone: .neutral)
+    }
+
+    func toggleRaw() {
+        settings.rawPhotos.toggle()
+        if settings.rawPhotos { settings.livePhotos = false }
+        camera.setCaptureFeatures(live: settings.livePhotos, raw: settings.rawPhotos)
+        let kind = cam.rawIsProRAW ? "ProRAW" : "RAW"
+        show(settings.rawPhotos ? "\(kind) on: saved with the HEIC, one shot per press" : "\(kind) off", tone: .neutral)
+    }
+
+    /// Live Photo and RAW shots are large and slow to capture, so they skip the burst.
+    var singleShot: Bool { cam.liveOn || cam.rawOn }
+
     func cycleTimer() {
         settings.timerSeconds = settings.timerSeconds == 0 ? 3 : (settings.timerSeconds == 3 ? 10 : 0)
         show(settings.timerSeconds == 0 ? "Timer off" : "Timer \(settings.timerSeconds)s", tone: .neutral)
@@ -308,14 +327,14 @@ final class CoachSession {
         isCapturing = true
         shutterFlash += 1
         Haptics.shutter()
-        let count = max(1, settings.burstCount)
+        let count = singleShot ? 1 : max(1, settings.burstCount)
         camera.captureBurst(count: count, interval: 0.12, mirrorSelfie: settings.mirrorSelfies) { [weak self] photos in
             guard let self else { return }
             Task { @MainActor in await self.finishBurst(photos) }
         }
     }
 
-    private func finishBurst(_ photos: [Data]) async {
+    private func finishBurst(_ photos: [CapturedShot]) async {
         defer {
             isCapturing = false
             lastCaptureEnd = CACurrentMediaTime()
@@ -332,7 +351,7 @@ final class CoachSession {
         lastBurst = result
         guard settings.autoSaveBest, let best = result.best else { return }
         do {
-            let inAlbum = try await PhotoSaver.save(best.data, location: sensors.location)
+            let inAlbum = try await PhotoSaver.save(best.shot, location: sensors.location)
             result.savedIndices.insert(best.index)
             lastBurst = result
             Haptics.success()
@@ -340,7 +359,11 @@ final class CoachSession {
             if result.frames.count > 1 {
                 show("\(where_): best of \(result.frames.count), \(result.reason)", tone: .ok)
             } else {
-                show(where_, tone: .ok)
+                var kind = ""
+                if best.shot.liveMovie != nil { kind = " · Live" }
+                if best.shot.raw != nil { kind = cam.rawIsProRAW ? " · ProRAW" : " · RAW" }
+                let blink = best.eyesClosed > 0 ? " · someone blinked" : ""
+                show(where_ + kind + blink, tone: best.eyesClosed > 0 ? .warn : .ok)
             }
         } catch {
             show(error.localizedDescription, tone: .error)
@@ -350,7 +373,7 @@ final class CoachSession {
     func save(frameIndex: Int) async {
         guard var b = lastBurst, let f = b.frames.first(where: { $0.index == frameIndex }) else { return }
         do {
-            try await PhotoSaver.save(f.data, location: sensors.location)
+            try await PhotoSaver.save(f.shot, location: sensors.location)
             b.savedIndices.insert(frameIndex)
             lastBurst = b
             Haptics.success()

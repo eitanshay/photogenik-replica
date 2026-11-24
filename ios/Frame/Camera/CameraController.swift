@@ -19,6 +19,20 @@ struct CameraState: Equatable {
     /// Clockwise rotation applied to analysis frames (90 = upright portrait).
     var analysisAngle: Double = 90
     var running = false
+    /// What this camera can capture, and what is switched on.
+    var liveSupported = false
+    var rawSupported = false
+    /// True when RAW means Apple ProRAW (Pro iPhones), false for plain Bayer RAW.
+    var rawIsProRAW = false
+    var liveOn = false
+    var rawOn = false
+}
+
+/// One captured photo: the processed image, plus the RAW file and Live Photo movie when asked for.
+struct CapturedShot: @unchecked Sendable {
+    var photo: Data
+    var raw: Data?
+    var liveMovie: URL?
 }
 
 /// Owns the capture session: live frames for analysis, preview, lenses, focus and exposure, and bursts.
@@ -38,6 +52,8 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     private var configured = false
     private var side: CameraSide = .back
     private var baseFactor: CGFloat = 1
+    private var wantLive = false
+    private var wantRaw = false
 
     /// Called on `videoQueue` for every live frame, with the side it came from.
     var onFrame: ((CMSampleBuffer, CameraSide) -> Void)?
@@ -127,6 +143,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             session.addOutput(photoOutput)
             photoOutput.maxPhotoQualityPrioritization = .quality
         }
+        applyCaptureFeaturesLocked()
         session.commitConfiguration()
 
         setupLenses(dev)
@@ -209,6 +226,40 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         publish()
     }
 
+    // MARK: Live Photo and RAW
+
+    /// Turns Live Photo and RAW capture on or off. They are exclusive, as in the Camera app.
+    func setCaptureFeatures(live: Bool, raw: Bool) {
+        sessionQueue.async { [self] in
+            wantLive = live && !raw
+            wantRaw = raw
+            guard configured else { return }
+            session.beginConfiguration()
+            applyCaptureFeaturesLocked()
+            session.commitConfiguration()
+            publish()
+        }
+    }
+
+    /// Call inside a session configuration block.
+    private func applyCaptureFeaturesLocked() {
+        let liveOK = photoOutput.isLivePhotoCaptureSupported
+        photoOutput.isLivePhotoCaptureEnabled = liveOK && wantLive
+        let proRAW = photoOutput.isAppleProRAWSupported
+        if proRAW { photoOutput.isAppleProRAWEnabled = wantRaw }
+        state.liveSupported = liveOK
+        state.rawIsProRAW = proRAW
+        state.rawSupported = proRAW || rawFormat(proRAW: false) != nil
+        state.liveOn = photoOutput.isLivePhotoCaptureEnabled
+        state.rawOn = wantRaw && state.rawSupported
+    }
+
+    private func rawFormat(proRAW: Bool) -> OSType? {
+        photoOutput.availableRawPhotoPixelFormatTypes.first { format in
+            proRAW ? AVCapturePhotoOutput.isAppleProRAWPixelFormat(format) : AVCapturePhotoOutput.isBayerRAWPixelFormat(format)
+        }
+    }
+
     // MARK: Lenses, focus, exposure
 
     func setZoom(display: Double) {
@@ -277,14 +328,14 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 
     /// Takes `count` photos spaced by `interval` seconds. Completion runs on the main queue with the
     /// encoded photos in shot order (failed frames are dropped).
-    func captureBurst(count: Int, interval: TimeInterval, mirrorSelfie: Bool, completion: @escaping ([Data]) -> Void) {
+    func captureBurst(count: Int, interval: TimeInterval, mirrorSelfie: Bool, completion: @escaping ([CapturedShot]) -> Void) {
         sessionQueue.async { [self] in
             guard session.isRunning else {
                 DispatchQueue.main.async { completion([]) }
                 return
             }
             let collector = BurstCollector(count: count, completion: completion)
-            let finishOne: (Int, Data?) -> Void = { index, data in collector.add(index, data) }
+            let finishOne: (Int, CapturedShot?) -> Void = { index, shot in collector.add(index, shot) }
             for i in 0..<count {
                 sessionQueue.asyncAfter(deadline: .now() + interval * Double(i)) { [self] in
                     shoot(index: i, burst: count > 1, mirrorSelfie: mirrorSelfie, done: finishOne)
@@ -293,14 +344,20 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         }
     }
 
-    private func shoot(index: Int, burst: Bool, mirrorSelfie: Bool, done: @escaping (Int, Data?) -> Void) {
+    private func shoot(index: Int, burst: Bool, mirrorSelfie: Bool, done: @escaping (Int, CapturedShot?) -> Void) {
+        let processed: [String: Any] = photoOutput.availablePhotoCodecTypes.contains(.hevc)
+            ? [AVVideoCodecKey: AVVideoCodecType.hevc] : [AVVideoCodecKey: AVVideoCodecType.jpeg]
         let settings: AVCapturePhotoSettings
-        if photoOutput.availablePhotoCodecTypes.contains(.hevc) {
-            settings = AVCapturePhotoSettings(format: [AVVideoCodecKey: AVVideoCodecType.hevc])
+        if state.rawOn, let raw = rawFormat(proRAW: state.rawIsProRAW) {
+            settings = AVCapturePhotoSettings(rawPixelFormatType: raw, processedFormat: processed)
         } else {
-            settings = AVCapturePhotoSettings()
+            settings = AVCapturePhotoSettings(format: processed)
         }
-        settings.photoQualityPrioritization = burst ? .speed : .balanced
+        settings.photoQualityPrioritization = burst ? .speed : (state.rawOn ? .quality : .balanced)
+        if photoOutput.isLivePhotoCaptureEnabled && !burst {
+            settings.livePhotoMovieFileURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("live-\(UUID().uuidString).mov")
+        }
         if let conn = photoOutput.connection(with: .video) {
             if let rc = coordinator {
                 let a = rc.videoRotationAngleForHorizonLevelCapture
@@ -313,9 +370,9 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
         }
         let id = settings.uniqueID
         let queue = sessionQueue
-        let delegate = PhotoDelegate { [weak self] data in
+        let delegate = PhotoDelegate { [weak self] shot in
             queue.async { [weak self] in self?.delegates[id] = nil }
-            done(index, data)
+            done(index, shot)
         }
         delegates[id] = delegate
         photoOutput.capturePhoto(with: settings, delegate: delegate)
@@ -325,19 +382,19 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
 /// Gathers burst frames from the photo callbacks, which can arrive on any thread.
 private final class BurstCollector: @unchecked Sendable {
     private let lock = NSLock()
-    private var results: [Data?]
+    private var results: [CapturedShot?]
     private var remaining: Int
-    private let completion: ([Data]) -> Void
+    private let completion: ([CapturedShot]) -> Void
 
-    init(count: Int, completion: @escaping ([Data]) -> Void) {
-        results = [Data?](repeating: nil, count: count)
+    init(count: Int, completion: @escaping ([CapturedShot]) -> Void) {
+        results = [CapturedShot?](repeating: nil, count: count)
         remaining = count
         self.completion = completion
     }
 
-    func add(_ index: Int, _ data: Data?) {
+    func add(_ index: Int, _ shot: CapturedShot?) {
         lock.lock()
-        if index < results.count { results[index] = data }
+        if index < results.count { results[index] = shot }
         remaining -= 1
         let done = remaining == 0
         let out = results.compactMap { $0 }
@@ -350,19 +407,32 @@ private final class BurstCollector: @unchecked Sendable {
 }
 
 private final class PhotoDelegate: NSObject, AVCapturePhotoCaptureDelegate {
-    private let done: (Data?) -> Void
-    private var called = false
-    init(done: @escaping (Data?) -> Void) { self.done = done }
+    private let done: (CapturedShot?) -> Void
+    private var processed: Data?
+    private var raw: Data?
+    private var movie: URL?
+    private var finished = false
+    init(done: @escaping (CapturedShot?) -> Void) { self.done = done }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        guard !called else { return }
-        called = true
-        done(error == nil ? photo.fileDataRepresentation() : nil)
+        guard error == nil, let data = photo.fileDataRepresentation() else { return }
+        if photo.isRawPhoto { raw = data } else { processed = data }
     }
 
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingLivePhotoToMovieFileAt outputFileURL: URL,
+                     duration: CMTime, photoDisplayTime: CMTime, resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+        if error == nil { movie = outputFileURL }
+    }
+
+    /// Called last, after the photo, the RAW file and the Live Photo movie are all done.
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
-        guard !called else { return }
-        called = true
-        done(nil)
+        guard !finished else { return }
+        finished = true
+        // Without a processed image there is nothing to rank or show; a lone RAW stands in for it.
+        guard let photo = processed ?? raw else {
+            done(nil)
+            return
+        }
+        done(CapturedShot(photo: photo, raw: processed == nil ? nil : raw, liveMovie: movie))
     }
 }

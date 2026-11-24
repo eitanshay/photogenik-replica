@@ -108,6 +108,21 @@ struct CameraScreen: View {
         .accessibilityLabel(label)
     }
 
+    private func pill(_ text: String, on: Bool, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(text)
+                .font(ESFont.mono(11, .bold))
+                .foregroundStyle(on ? ES.onSignal : .white)
+                .padding(.horizontal, 10)
+                .frame(height: 30)
+                .background(Capsule().fill(on ? ES.signal : Color.black.opacity(0.45)))
+                .overlay(Capsule().strokeBorder(on ? Color.clear : Color.white.opacity(0.35), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+
     private func toggle(_ symbol: String, on: Bool, text: String? = nil, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Group {
@@ -137,7 +152,13 @@ struct CameraScreen: View {
                     .onTapGesture { location in session.focus(atLayerPoint: location) }
                 OverlayView(size: size)
                 VStack(spacing: 8) {
-                    HStack {
+                    HStack(spacing: 6) {
+                        if session.cam.liveSupported {
+                            pill("LIVE", on: session.cam.liveOn, label: "Live Photo") { session.toggleLive() }
+                        }
+                        if session.cam.rawSupported {
+                            pill(session.cam.rawIsProRAW ? "ProRAW" : "RAW", on: session.cam.rawOn, label: "RAW capture") { session.toggleRaw() }
+                        }
                         Spacer()
                         directorButton
                     }

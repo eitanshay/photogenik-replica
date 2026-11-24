@@ -6,8 +6,9 @@ import Vision
 struct BurstFrame: Identifiable, @unchecked Sendable {
     let id = UUID()
     let index: Int
-    let data: Data
+    let shot: CapturedShot
     let thumbnail: UIImage
+    var data: Data { shot.photo }
     var score: Double = 0
     var eyesClosed = 0
 }
@@ -85,14 +86,14 @@ enum StillAnalyzer {
     }
 
     /// Ranks a burst. Call off the main thread: each frame runs Vision.
-    static func analyze(_ photos: [Data]) -> BurstResult? {
-        guard !photos.isEmpty else { return nil }
+    static func analyze(_ shots: [CapturedShot]) -> BurstResult? {
+        guard !shots.isEmpty else { return nil }
         var frames: [BurstFrame] = []
         var candidates: [ShotCandidate] = []
-        for (i, data) in photos.enumerated() {
-            guard let img = cgImage(data, maxSide: 1280) else { continue }
-            let thumbImg = cgImage(data, maxSide: 600) ?? img
-            frames.append(BurstFrame(index: i, data: data, thumbnail: UIImage(cgImage: thumbImg)))
+        for (i, shot) in shots.enumerated() {
+            guard let img = cgImage(shot.photo, maxSide: 1280) else { continue }
+            let thumbImg = cgImage(shot.photo, maxSide: 600) ?? img
+            frames.append(BurstFrame(index: i, shot: shot, thumbnail: UIImage(cgImage: thumbImg)))
             candidates.append(candidate(img))
         }
         guard !frames.isEmpty else { return nil }

@@ -19,14 +19,20 @@ enum PhotoSaver {
 
     /// Saves the photo exactly as captured (HEIC or JPEG data) with its location. With full access it also
     /// files it in a "frame" album; otherwise it lands in Recents only. Returns true when it went into the album.
+    /// Saves a shot with its RAW file (as the alternate original) and Live Photo movie, when it has them.
     @discardableResult
-    static func save(_ data: Data, location: CLLocation?) async throws -> Bool {
+    static func save(_ shot: CapturedShot, location: CLLocation?) async throws -> Bool {
+        try await save(shot.photo, raw: shot.raw, liveMovie: shot.liveMovie, location: location)
+    }
+
+    @discardableResult
+    static func save(_ data: Data, raw: Data? = nil, liveMovie: URL? = nil, location: CLLocation?) async throws -> Bool {
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         switch status {
         case .authorized:
             let album = findAlbum()
             try await PHPhotoLibrary.shared().performChanges {
-                let request = makeRequest(data, location: location)
+                let request = makeRequest(data, raw: raw, liveMovie: liveMovie, location: location)
                 guard let placeholder = request.placeholderForCreatedAsset else { return }
                 if let album, let change = PHAssetCollectionChangeRequest(for: album) {
                     change.addAssets([placeholder] as NSArray)
@@ -37,19 +43,28 @@ enum PhotoSaver {
             }
             return true
         case .limited:
-            try await PHPhotoLibrary.shared().performChanges { _ = makeRequest(data, location: location) }
+            try await PHPhotoLibrary.shared().performChanges { _ = makeRequest(data, raw: raw, liveMovie: liveMovie, location: location) }
             return false
         default:
             let addOnly = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
             guard addOnly == .authorized || addOnly == .limited else { throw SaveError.denied }
-            try await PHPhotoLibrary.shared().performChanges { _ = makeRequest(data, location: location) }
+            try await PHPhotoLibrary.shared().performChanges { _ = makeRequest(data, raw: raw, liveMovie: liveMovie, location: location) }
             return false
         }
     }
 
-    private static func makeRequest(_ data: Data, location: CLLocation?) -> PHAssetCreationRequest {
+    private static func makeRequest(_ data: Data, raw: Data?, liveMovie: URL?, location: CLLocation?) -> PHAssetCreationRequest {
         let request = PHAssetCreationRequest.forAsset()
         request.addResource(with: .photo, data: data, options: nil)
+        if let raw {
+            let opts = PHAssetResourceCreationOptions()
+            opts.uniformTypeIdentifier = "com.adobe.raw-image"
+            request.addResource(with: .alternatePhoto, data: raw, options: opts)
+        }
+        if let liveMovie, FileManager.default.fileExists(atPath: liveMovie.path) {
+            // Copy rather than move, so saving the same frame again still has its movie.
+            request.addResource(with: .pairedVideo, fileURL: liveMovie, options: nil)
+        }
         request.creationDate = Date()
         if let location { request.location = location }
         return request

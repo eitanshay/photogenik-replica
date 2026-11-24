@@ -25,6 +25,7 @@ Also on screen: a thirds grid, a level bar that turns green when straight, brack
 - **Auto** (A button): shoots on its own once the shot has been ready for 0.7 seconds.
 - **Hands-free** (hand button): show an open palm to the camera to start a 3 second countdown. Good for a phone propped on a wall.
 - **Timer**: 3 or 10 seconds.
+- **LIVE and RAW** (top-left of the viewfinder): Live Photo, or RAW (Apple ProRAW on Pro iPhones, plain RAW where the camera allows it). They are exclusive, as in the Camera app. With either on, each press takes one shot instead of a burst, because both are large captures. RAW is saved together with the HEIC as one Photos item; the toast warns when someone blinked.
 - **Voice**: speaks the top cue, the countdown, and "Looks good" (default: selfies only, since you cannot read the screen at arm's length).
 
 ## Light

@@ -30,6 +30,8 @@ final class SettingsStore {
     var mirrorSelfies: Bool { didSet { d.set(mirrorSelfies, forKey: "mirrorSelfies") } }
     var showGrid: Bool { didSet { d.set(showGrid, forKey: "showGrid") } }
     var showCoaching: Bool { didSet { d.set(showCoaching, forKey: "showCoaching") } }
+    var livePhotos: Bool { didSet { d.set(livePhotos, forKey: "livePhotos") } }
+    var rawPhotos: Bool { didSet { d.set(rawPhotos, forKey: "rawPhotos") } }
     var directorModel: String { didSet { d.set(directorModel, forKey: "directorModel") } }
     var geminiKey: String { didSet { KeychainStore.write(geminiKey) } }
 
@@ -45,6 +47,8 @@ final class SettingsStore {
         mirrorSelfies = d.object(forKey: "mirrorSelfies") as? Bool ?? true
         showGrid = d.object(forKey: "showGrid") as? Bool ?? true
         showCoaching = d.object(forKey: "showCoaching") as? Bool ?? true
+        livePhotos = d.object(forKey: "livePhotos") as? Bool ?? false
+        rawPhotos = d.object(forKey: "rawPhotos") as? Bool ?? false
         let model = d.string(forKey: "directorModel") ?? DirectorModels.default
         directorModel = DirectorModels.all.contains(model) ? model : DirectorModels.default
         geminiKey = KeychainStore.read()

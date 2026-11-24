@@ -70,7 +70,7 @@ struct OverlayView: View {
                     .foregroundStyle(ES.onSignal)
                     .frame(width: 44, height: 44)
                     .background(Circle().fill(ES.signal))
-                    .position(x: 34, y: 34)
+                    .position(x: size.width / 2, y: 34)
                     .allowsHitTesting(false)
             }
         }

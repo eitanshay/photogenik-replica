@@ -168,7 +168,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Capture")
                 } footer: {
-                    Text("Each press takes a short burst and keeps the frame with open eyes and the sharpest face. All frames stay in Last shot until the next press.")
+                    Text("Each press takes a short burst and keeps the frame with open eyes and the sharpest face. All frames stay in Last shot until the next press. Turn on LIVE or RAW on the viewfinder: those take one shot per press, since each is a large capture. RAW is saved together with the HEIC in one Photos item.")
                 }
 
                 Section("About") {
