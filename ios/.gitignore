@@ -1,0 +1,7 @@
+xcuserdata/
+*.xcuserstate
+DerivedData/
+FrameCore/.build/
+FrameCore/.swiftpm/
+build/
+.DS_Store
