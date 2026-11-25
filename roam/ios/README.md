@@ -1,5 +1,7 @@
 # roam for iOS (ES-11)
 
+Lives in roam/ios of this repo; built by the "roam iOS to TestFlight" Codemagic workflow.
+
 A travel companion for one person (or each family member on their own phone). It nudges you near places you saved or should see, finds the best coffee, the best food and the nearest restroom, and reads you a two-minute story about where you are standing. Built to be easy on the battery.
 
 ## What it does
