@@ -16,17 +16,14 @@ struct SettingsScreen: View {
         NavigationStack {
             Form {
                 Section {
-                    SecureField("Google Maps Platform key", text: $mapsKey)
-                        .font(ESFont.mono(13)).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    SecureField("Anthropic API key", text: $claudeKey)
-                        .font(ESFont.mono(13)).textInputAutocapitalization(.never).autocorrectionDisabled()
+                    KeyField(title: "Anthropic API key", placeholder: "sk-ant-…", text: $claudeKey, saved: settings.anthropicKey) {
+                        settings.anthropicKey = claudeKey
+                    }
+                    KeyField(title: "Google Maps key", placeholder: "AIza…", text: $mapsKey, saved: settings.googleMapsKey) {
+                        settings.googleMapsKey = mapsKey
+                    }
                     TextField("Claude model", text: $settings.claudeModel)
                         .font(ESFont.mono(13)).textInputAutocapitalization(.never).autocorrectionDisabled()
-                    Button("Save keys") {
-                        settings.googleMapsKey = mapsKey
-                        settings.anthropicKey = claudeKey
-                        status = "Keys saved to the Keychain"
-                    }
                 } header: {
                     Text("Keys")
                 } footer: {
@@ -243,5 +240,43 @@ struct OnboardingView: View {
             }
         }
         .raisedSurface()
+    }
+}
+
+/// One key per row with its own Save, so each can be set on its own; shows whether the saved value matches.
+struct KeyField: View {
+    let title: String
+    let placeholder: String
+    @Binding var text: String
+    let saved: String
+    var save: () -> Void
+
+    private var trimmed: String { text.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var isSaved: Bool { !saved.isEmpty && trimmed == saved }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title).font(ESFont.small).foregroundStyle(ES.ink2)
+                Spacer()
+                if isSaved {
+                    Label("Saved", systemImage: "checkmark.circle.fill").font(ESFont.mono(11)).foregroundStyle(ES.ok)
+                } else if !saved.isEmpty && trimmed.isEmpty {
+                    Text("will remove").font(ESFont.mono(11)).foregroundStyle(ES.warn)
+                }
+            }
+            HStack(spacing: 10) {
+                SecureField(placeholder, text: $text)
+                    .font(ESFont.mono(13))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .onSubmit(save)
+                Button("Save", action: save)
+                    .buttonStyle(.borderless)
+                    .disabled(trimmed == saved)
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
