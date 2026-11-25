@@ -88,3 +88,4 @@ Same setup as frame, polish and BloomTrack, plus one extra identifier for the sh
 - "Best coffee" is only as good as Google ratings plus the specialty heuristics. It is strong in big cities and noisier in small towns.
 - Discovery uses English Wikipedia by default; switch to the local language in Settings for better coverage abroad.
 - Michelin data comes from the open michelin-my-maps dataset (scraped from the guide), refreshed monthly.
+
