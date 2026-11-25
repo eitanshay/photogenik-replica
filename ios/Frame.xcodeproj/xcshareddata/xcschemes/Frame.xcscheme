@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "ACD8682E256FBAA3F24B93E3"
+               BlueprintIdentifier = "660B936AC2244ACF88D9E00A"
                BuildableName = "Frame.app"
                BlueprintName = "Frame"
                ReferencedContainer = "container:Frame.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ACD8682E256FBAA3F24B93E3"
+            BlueprintIdentifier = "660B936AC2244ACF88D9E00A"
             BuildableName = "Frame.app"
             BlueprintName = "Frame"
             ReferencedContainer = "container:Frame.xcodeproj">
@@ -53,7 +53,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ACD8682E256FBAA3F24B93E3"
+            BlueprintIdentifier = "660B936AC2244ACF88D9E00A"
             BuildableName = "Frame.app"
             BlueprintName = "Frame"
             ReferencedContainer = "container:Frame.xcodeproj">
@@ -70,7 +70,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "ACD8682E256FBAA3F24B93E3"
+            BlueprintIdentifier = "660B936AC2244ACF88D9E00A"
             BuildableName = "Frame.app"
             BlueprintName = "Frame"
             ReferencedContainer = "container:Frame.xcodeproj">

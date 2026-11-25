@@ -21,6 +21,7 @@ struct LiveState: Equatable {
     var zones: [Rect]
     var openPalm: Bool
     var people: Int
+    var scene: SceneStats
     /// Width over height of the analysed frame (in its own upright orientation).
     var aspect: Double
 }
@@ -212,7 +213,7 @@ final class FrameAnalyzer: @unchecked Sendable {
             zones += c.zones
         }
         let state = LiveState(shown: shown, faces: analysis.subjectFaces, marks: marks, zones: zones, openPalm: palm,
-                              people: analysis.subjectFaces.count, aspect: analysis.aspect)
+                              people: analysis.subjectFaces.count, scene: scene, aspect: analysis.aspect)
         DispatchQueue.main.async { [weak self] in self?.onState?(state) }
     }
 

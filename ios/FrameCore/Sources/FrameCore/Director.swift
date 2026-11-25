@@ -16,9 +16,11 @@ public struct DirectorContext: Equatable, Sendable {
     public var localTime: String
     public var sun: String?
     public var place: String?
+    /// When the photo will be taken with another camera, what it is and the planned settings.
+    public var camera: String?
 
     public init(mode: ShootMode, side: CameraSide, zoom: Double, elevation: Double, levelError: Double, people: Int,
-                localTime: String, sun: String? = nil, place: String? = nil) {
+                localTime: String, sun: String? = nil, place: String? = nil, camera: String? = nil) {
         self.mode = mode
         self.side = side
         self.zoom = zoom
@@ -28,6 +30,7 @@ public struct DirectorContext: Equatable, Sendable {
         self.localTime = localTime
         self.sun = sun
         self.place = place
+        self.camera = camera
     }
 
     /// Plain-language description of where the sun is, for the prompt.
@@ -60,6 +63,7 @@ public struct DirectorAdvice: Equatable, Sendable {
     /// Where the main subject should sit after the changes.
     public var subjectBox: Rect?
     public var idea: String?
+    public var cameraTip: String?
 }
 
 public enum Director {
@@ -77,6 +81,12 @@ public enum Director {
         ]
         if let s = c.sun { ctx.append("Light: \(s)") }
         if let p = c.place { ctx.append("Place: \(p)") }
+        if let cam = c.camera { ctx.append("Final camera: \(cam). The iPhone frame shows that camera's field of view.") }
+        let cameraRule = c.camera == nil ? "" : """
+        - The photo will be taken with the camera named under Final camera, not the iPhone. Lens advice must fit it \
+        (no switching iPhone lenses). In camera_tip, say in one sentence whether to change its planned settings and how.
+
+        """
 
         return """
         You are a world-class travel and portrait photographer standing next to someone with an iPhone, coaching them in real time. \
@@ -98,14 +108,14 @@ public enum Director {
         - Keep every string under 110 characters. Plain words, no jargon.
         - who must be \(who).
         - direction is one of: left, right, closer, back, raise, lower, tiltUp, tiltDown, rotateCW, rotateCCW, turn, none.
-        - subject_box is where the main subject should sit in the frame after your changes, as [ymin, xmin, ymax, xmax] \
+        \(cameraRule)- subject_box is where the main subject should sit in the frame after your changes, as [ymin, xmin, ymax, xmax] \
         scaled 0 to 1000, or null if the framing is already right.
 
         Return only JSON:
         {"headline": string, "rating": integer 1-10 for the shot as it is now, \
         "moves": [{"who": string, "do": string, "direction": string}], "pose": [string], \
         "background": string, "light": string, "lens": "0.5" | "1" | "2" | "3" | "5" | "none", \
-        "subject_box": [number, number, number, number] | null, "idea": string}
+        "subject_box": [number, number, number, number] | null, "idea": string\(c.camera == nil ? "" : ", \"camera_tip\": string")}
         """
     }
 
@@ -195,6 +205,6 @@ public enum Director {
         let pose = ((o["pose"] as? [Any]) ?? []).compactMap { str($0) }.prefix(3)
         return DirectorAdvice(headline: headline, rating: rating, moves: moves, pose: Array(pose),
                               background: str(o["background"]), light: str(o["light"]), lens: lens,
-                              subjectBox: box, idea: str(o["idea"]))
+                              subjectBox: box, idea: str(o["idea"]), cameraTip: str(o["camera_tip"]))
     }
 }

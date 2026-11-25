@@ -28,6 +28,16 @@ Also on screen: a thirds grid, a level bar that turns green when straight, brack
 - **LIVE and RAW** (top-left of the viewfinder): Live Photo, or RAW (Apple ProRAW on Pro iPhones, plain RAW where the camera allows it). They are exclusive, as in the Camera app. With either on, each press takes one shot instead of a burst, because both are large captures. RAW is saved together with the HEIC as one Photos item; the toast warns when someone blinked.
 - **Voice**: speaks the top cue, the countdown, and "Looks good" (default: selfies only, since you cannot read the screen at arm's length).
 
+## X100VI planning
+
+Tap **X100VI** at the top left of the viewfinder to plan a shot for the Fujifilm X100VI before you raise it.
+
+- **Framing.** The view zooms to the X100VI's field of view (35mm equivalent, or the 50mm and 70mm digital teleconverter crops) and masks it to 3:2, so the coaching applies to the photo you will actually take.
+- **Settings card.** Pick what you are shooting (auto, portrait, street, landscape, group, action, night). The card shows aperture, shutter and ISO big, then ND, MS or ES, exposure compensation, dynamic range, film simulation, focus mode and depth of field, and the first thing to watch out for. Tap it for the full plan: every setting, why, metering, flash, and a complete film recipe to save to a custom slot. The lock holds the plan while you switch to the camera.
+- **How it decides.** Scene brightness comes from the iPhone's own exposure (EV at ISO 100), smoothed over about two seconds. Each intent sets an aperture and the slowest shutter its subject tolerates; the planner raises ISO, opens up, then accepts a slower shutter (with warnings), or in bright light stops down, adds the 4-stop ND, or moves to the electronic shutter. Backlit faces get plus compensation and a fill-flash note (the leaf shutter syncs at every speed). DR200 and DR400 are only offered at ISO 250 and 500 or higher, as on the camera. All logic is in `FrameCore/Sources/FrameCore/FujiPlanner.swift` with tests.
+- **Limits.** The iPhone meter is usually within about a stop of the X100VI's, so check the histogram on the first frame. The leaf shutter's top speed at wide apertures is not in Fujifilm's published specs, so the planner uses conservative limits (1/1000 below f/4, 1/2000 below f/8) and reaches for the ND or ES before relying on the leaf shutter's fastest speeds. Subject distance is estimated from face size, so depth of field is approximate.
+- **Director.** In this mode the director is told you will shoot on the X100VI with the planned settings, and adds a line on whether to change them.
+
 ## Light
 
 With location on, the badge in the top bar shows the light: golden hour countdown ("golden in 1h 12m", "golden · 18m left"), daylight, harsh sun or night. The sun's direction relative to where the lens points (from the compass) feeds the coaching: backlit subjects get "expose for their face" instead of "turn around", midday hard light gets "find open shade", scenes get "shooting into the sun".

@@ -26,6 +26,16 @@ struct CameraState: Equatable {
     var rawIsProRAW = false
     var liveOn = false
     var rawOn = false
+    /// Horizontal field of view at zoom 1 (the widest lens), degrees.
+    var horizontalFOV: Double = 0
+}
+
+/// The iPhone's current exposure, used as a light meter.
+struct MeterReading {
+    var aperture: Double
+    var seconds: Double
+    var iso: Double
+    var targetOffset: Double
 }
 
 /// One captured photo: the processed image, plus the RAW file and Live Photo movie when asked for.
@@ -155,6 +165,7 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
             dev.unlockForConfiguration()
         }
         state.side = side
+        state.horizontalFOV = Double(dev.activeFormat.videoFieldOfView)
         publish()
     }
 
@@ -261,6 +272,31 @@ final class CameraController: NSObject, AVCaptureVideoDataOutputSampleBufferDele
     }
 
     // MARK: Lenses, focus, exposure
+
+    /// Zooms to a 35mm-equivalent focal length (for matching another camera's framing).
+    func setZoom(equivalent focal: Double) {
+        sessionQueue.async { [self] in
+            guard let dev = device else { return }
+            let fov = Double(dev.activeFormat.videoFieldOfView)
+            let factor = CGFloat(FujiPlanner.zoomFactor(forEquivalent: focal, deviceHorizontalFOV: fov))
+            do {
+                try dev.lockForConfiguration()
+                dev.videoZoomFactor = min(max(factor, dev.minAvailableVideoZoomFactor), dev.maxAvailableVideoZoomFactor)
+                dev.unlockForConfiguration()
+                state.zoom = Double(dev.videoZoomFactor / baseFactor)
+                publish()
+            } catch {}
+        }
+    }
+
+    /// Current exposure, read straight from the device (these properties are safe to read off the session queue).
+    func meter() -> MeterReading? {
+        guard let dev = device else { return nil }
+        let seconds = CMTimeGetSeconds(dev.exposureDuration)
+        guard seconds.isFinite, seconds > 0 else { return nil }
+        return MeterReading(aperture: Double(dev.lensAperture), seconds: seconds, iso: Double(dev.iso),
+                            targetOffset: Double(dev.exposureTargetOffset))
+    }
 
     func setZoom(display: Double) {
         sessionQueue.async { [self] in setZoomLocked(display: display) }

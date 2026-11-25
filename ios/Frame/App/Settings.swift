@@ -32,6 +32,10 @@ final class SettingsStore {
     var showCoaching: Bool { didSet { d.set(showCoaching, forKey: "showCoaching") } }
     var livePhotos: Bool { didSet { d.set(livePhotos, forKey: "livePhotos") } }
     var rawPhotos: Bool { didSet { d.set(rawPhotos, forKey: "rawPhotos") } }
+    var fujiMode: Bool { didSet { d.set(fujiMode, forKey: "fujiMode") } }
+    var fujiIntent: FujiIntent { didSet { d.set(fujiIntent.rawValue, forKey: "fujiIntent") } }
+    var fujiLook: FujiLook { didSet { d.set(fujiLook.rawValue, forKey: "fujiLook") } }
+    var fujiCrop: FujiCrop { didSet { d.set(fujiCrop.rawValue, forKey: "fujiCrop") } }
     var directorModel: String { didSet { d.set(directorModel, forKey: "directorModel") } }
     var geminiKey: String { didSet { KeychainStore.write(geminiKey) } }
 
@@ -49,6 +53,10 @@ final class SettingsStore {
         showCoaching = d.object(forKey: "showCoaching") as? Bool ?? true
         livePhotos = d.object(forKey: "livePhotos") as? Bool ?? false
         rawPhotos = d.object(forKey: "rawPhotos") as? Bool ?? false
+        fujiMode = d.object(forKey: "fujiMode") as? Bool ?? false
+        fujiIntent = FujiIntent(rawValue: d.string(forKey: "fujiIntent") ?? "") ?? .auto
+        fujiLook = FujiLook(rawValue: d.string(forKey: "fujiLook") ?? "") ?? .auto
+        fujiCrop = FujiCrop(rawValue: d.integer(forKey: "fujiCrop")) ?? .mm35
         let model = d.string(forKey: "directorModel") ?? DirectorModels.default
         directorModel = DirectorModels.all.contains(model) ? model : DirectorModels.default
         geminiKey = KeychainStore.read()

@@ -58,6 +58,12 @@ final class CoachSession {
     var place: String?
     var director: DirectorPhase = .idle
     var steadyReady = false
+    /// X100VI planning: the current plan, the smoothed scene brightness, and whether the plan is frozen.
+    var fujiPlan: FujiPlan?
+    var fujiEV: Double?
+    var fujiLocked = false
+    var showFujiDetail = false
+    @ObservationIgnored private var lastFujiUpdate: CFTimeInterval = 0
 
     init(settings: SettingsStore) {
         self.settings = settings
@@ -78,9 +84,10 @@ final class CoachSession {
             guard ok else { return }
             let side: CameraSide = settings.mode == .selfie ? .front : .back
             camera.setCaptureFeatures(live: settings.livePhotos, raw: settings.rawPhotos)
-            camera.start(side: side)
+            camera.start(side: settings.fujiMode ? .back : side)
             sensors.start()
             started = true
+            if settings.fujiMode { camera.setZoom(equivalent: settings.fujiCrop.focalEquivalent) }
         }
     }
 
@@ -99,10 +106,19 @@ final class CoachSession {
     }
 
     private func syncInputs() {
-        let coach = settings.coach
+        var coach = settings.coach
+        if settings.fujiMode {
+            switch settings.fujiIntent {
+            case .portrait: coach.mode = .portrait
+            case .group: coach.mode = .group
+            case .landscape: coach.mode = .scene
+            default: coach.mode = .auto
+            }
+        }
         let hands = settings.handsFree
         let att = attitude
-        let zoom = cam.zoom
+        // In X100VI mode the phone's own lens advice does not apply, so the coach is told it is already long.
+        let zoom = settings.fujiMode ? 2.0 : cam.zoom
         let ultra = cam.hasUltraWide
         let sunCtx = sunContext
         analyzer.update { i in
@@ -128,6 +144,14 @@ final class CoachSession {
             analyzer.resetSmoothing()
             live = nil
             director = .idle
+            if settings.fujiMode {
+                if s.side == .front {
+                    settings.fujiMode = false
+                    show("X100VI planning is for the rear camera", tone: .neutral)
+                } else {
+                    camera.setZoom(equivalent: settings.fujiCrop.focalEquivalent)
+                }
+            }
         }
         syncInputs()
     }
@@ -201,6 +225,10 @@ final class CoachSession {
     private func handleLive(_ s: LiveState) {
         live = s
         let now = CACurrentMediaTime()
+        if settings.fujiMode && !fujiLocked && now - lastFujiUpdate > 0.5 {
+            lastFujiUpdate = now
+            updateFujiPlan(s)
+        }
         let ready = s.shown.steadyReady
         if ready && !steadyReady {
             Haptics.ready()
@@ -237,6 +265,72 @@ final class CoachSession {
         case .always: return true
         case .selfie: return cam.side == .front
         }
+    }
+
+    // MARK: X100VI planning
+
+    func toggleFuji() {
+        settings.fujiMode.toggle()
+        fujiLocked = false
+        if settings.fujiMode {
+            if cam.side == .front { camera.flip() } else { camera.setZoom(equivalent: settings.fujiCrop.focalEquivalent) }
+            if cam.liveOn || cam.rawOn {
+                settings.livePhotos = false
+                settings.rawPhotos = false
+                camera.setCaptureFeatures(live: false, raw: false)
+            }
+            show("X100VI: framed at \(settings.fujiCrop.label), settings on the card", tone: .neutral)
+        } else {
+            fujiPlan = nil
+            camera.setZoom(display: 1)
+        }
+        analyzer.resetSmoothing()
+        syncInputs()
+    }
+
+    func setFujiCrop(_ c: FujiCrop) {
+        settings.fujiCrop = c
+        camera.setZoom(equivalent: c.focalEquivalent)
+        fujiLocked = false
+        Haptics.tap()
+    }
+
+    func setFujiIntent(_ i: FujiIntent) {
+        settings.fujiIntent = i
+        fujiLocked = false
+        analyzer.resetSmoothing()
+        syncInputs()
+        if let live { updateFujiPlan(live) }
+    }
+
+    func setFujiLook(_ l: FujiLook) {
+        settings.fujiLook = l
+        if let live { updateFujiPlan(live, force: true) }
+    }
+
+    func toggleFujiLock() {
+        fujiLocked.toggle()
+        Haptics.tap()
+        if !fujiLocked, let live { updateFujiPlan(live) }
+    }
+
+    private func updateFujiPlan(_ s: LiveState, force: Bool = false) {
+        guard let m = camera.meter() else { return }
+        let ev = FujiPlanner.ev100(aperture: m.aperture, exposureSeconds: m.seconds, iso: m.iso, targetOffset: m.targetOffset)
+        // Smooth over about two seconds so the card does not flicker with every cloud.
+        let smoothed = fujiEV.map { $0 * 0.7 + ev * 0.3 } ?? ev
+        fujiEV = smoothed
+        let main = s.faces.max { $0.rect.area < $1.rect.area }
+        var backlight: Double?
+        if let face = main?.faceLuma, let bg = s.scene.backgroundLuma, face > 0.01 {
+            // Luma is gamma-encoded; about 2.2 turns its ratio into stops of light.
+            backlight = 2.2 * log2(max(bg, 0.01) / face)
+        }
+        let input = FujiInput(ev100: smoothed, intent: settings.fujiIntent, look: settings.fujiLook, crop: settings.fujiCrop,
+                              people: s.people, faceWidth: main?.rect.w, landscapeHold: attitude.hold.isLandscape,
+                              backlightStops: backlight, highlightClip: s.scene.highlightClip, sun: sun?.phase)
+        let plan = FujiPlanner.plan(input)
+        if force || plan != fujiPlan { fujiPlan = plan }
     }
 
     // MARK: Controls
@@ -427,7 +521,9 @@ final class CoachSession {
                                   elevation: attitude.elevation, levelError: attitude.levelError,
                                   people: live?.people ?? 0,
                                   localTime: Date().formatted(date: .omitted, time: .shortened),
-                                  sun: sunContext.map(DirectorContext.sunPhrase), place: place)
+                                  sun: sunContext.map(DirectorContext.sunPhrase), place: place,
+                                  camera: settings.fujiMode ? fujiPlan.map { "Fujifilm X100VI at \(settings.fujiCrop.label), planned " + FujiPlanner.summary($0) }
+                                      ?? "Fujifilm X100VI at \(settings.fujiCrop.label)" : nil)
         let model = settings.directorModel
         let side = cam.side
         Task { [weak self] in

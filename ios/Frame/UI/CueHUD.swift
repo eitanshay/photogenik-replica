@@ -159,10 +159,11 @@ struct DirectorPanel: View {
                                     .fixedSize(horizontal: false, vertical: true)
                             }
                         }
+                        if let tip = a.cameraTip { line("x100vi", tip) }
                         if let l = a.light { line("light", l) }
                         if let b = a.background { line("background", b) }
                         if let idea = a.idea { line("try", idea) }
-                        if let lens = a.lens, session.cam.side == .back, abs(lens - session.cam.zoom) > 0.2,
+                        if let lens = a.lens, session.cam.side == .back, !session.settings.fujiMode, abs(lens - session.cam.zoom) > 0.2,
                            session.cam.lenses.contains(where: { abs($0.display - lens) < 0.3 }) {
                             Button("Switch to \(lens < 1 ? "0.5" : String(Int(lens.rounded())))×") { session.perform(.lens(lens)) }
                                 .buttonStyle(PillButtonStyle(kind: .primary, size: .sm))

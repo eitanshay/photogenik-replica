@@ -14,12 +14,21 @@ struct OverlayView: View {
         ZStack {
             let showGrid = settings.showGrid
             let coaching = settings.showCoaching
+            // X100VI frames are 3:2. The zoom matches the long side, so the short side loses 1/18 at each edge.
+            let fuji = settings.fujiMode
+            let frameRect = fuji ? CGRect(x: size.width / 18, y: 0, width: size.width * 8 / 9, height: size.height)
+                                 : CGRect(origin: .zero, size: size)
             let directorBox: Rect? = {
                 if case .ready(let advice) = session.director { return advice.subjectBox }
                 return nil
             }()
             Canvas { ctx, sz in
-                if showGrid { OverlayDraw.grid(&ctx, sz) }
+                if fuji {
+                    ctx.fill(Path(CGRect(x: 0, y: 0, width: frameRect.minX, height: sz.height)), with: .color(.black.opacity(0.6)))
+                    ctx.fill(Path(CGRect(x: frameRect.maxX, y: 0, width: sz.width - frameRect.maxX, height: sz.height)), with: .color(.black.opacity(0.6)))
+                    ctx.stroke(Path(frameRect), with: .color(.white.opacity(0.5)), lineWidth: 1)
+                }
+                if showGrid { OverlayDraw.grid(&ctx, frameRect) }
                 if let live, coaching {
                     for f in live.faces { OverlayDraw.brackets(&ctx, map.rect(f.rect), closed: f.eyesClosed == true) }
                     if let t = live.shown.targetZone { OverlayDraw.dashed(&ctx, map.rect(t), color: ES.signal) }
@@ -101,13 +110,13 @@ struct OverlayView: View {
 /// Canvas drawing for the overlay. Kept outside the view so it has no actor isolation.
 enum OverlayDraw {
 
-    static func grid(_ ctx: inout GraphicsContext, _ sz: CGSize) {
+    static func grid(_ ctx: inout GraphicsContext, _ r: CGRect) {
         var p = Path()
         for i in 1...2 {
-            let x = sz.width * CGFloat(i) / 3
-            let y = sz.height * CGFloat(i) / 3
-            p.move(to: CGPoint(x: x, y: 0)); p.addLine(to: CGPoint(x: x, y: sz.height))
-            p.move(to: CGPoint(x: 0, y: y)); p.addLine(to: CGPoint(x: sz.width, y: y))
+            let x = r.minX + r.width * CGFloat(i) / 3
+            let y = r.minY + r.height * CGFloat(i) / 3
+            p.move(to: CGPoint(x: x, y: r.minY)); p.addLine(to: CGPoint(x: x, y: r.maxY))
+            p.move(to: CGPoint(x: r.minX, y: y)); p.addLine(to: CGPoint(x: r.maxX, y: y))
         }
         ctx.stroke(p, with: .color(.white.opacity(0.22)), lineWidth: 0.7)
     }

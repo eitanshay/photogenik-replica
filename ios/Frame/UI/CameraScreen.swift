@@ -20,8 +20,17 @@ struct CameraScreen: View {
                         .frame(height: 50)
                     viewfinder
                     Spacer(minLength: 10)
-                    PillTabs(items: ShootMode.allCases.map { ($0, $0.label) }, selection: settings.mode) { m in
-                        session.setMode(m)
+                    if settings.fujiMode {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            PillTabs(items: FujiIntent.allCases.map { ($0, $0.label) }, selection: settings.fujiIntent) { i in
+                                session.setFujiIntent(i)
+                            }
+                            .padding(.horizontal, 12)
+                        }
+                    } else {
+                        PillTabs(items: ShootMode.allCases.map { ($0, $0.label) }, selection: settings.mode) { m in
+                            session.setMode(m)
+                        }
                     }
                     Spacer(minLength: 10)
                     bottomControls
@@ -55,6 +64,9 @@ struct CameraScreen: View {
         }
         .sheet(isPresented: $session.showReview) {
             ReviewSheet().environment(session)
+        }
+        .sheet(isPresented: $session.showFujiDetail) {
+            FujiDetailSheet().environment(session).environment(settings)
         }
         .onAppear { session.start() }
         .onChange(of: scenePhase) { _, phase in
@@ -153,10 +165,11 @@ struct CameraScreen: View {
                 OverlayView(size: size)
                 VStack(spacing: 8) {
                     HStack(spacing: 6) {
-                        if session.cam.liveSupported {
+                        pill("X100VI", on: settings.fujiMode, label: "Plan for the Fujifilm X100VI") { session.toggleFuji() }
+                        if session.cam.liveSupported && !settings.fujiMode {
                             pill("LIVE", on: session.cam.liveOn, label: "Live Photo") { session.toggleLive() }
                         }
-                        if session.cam.rawSupported {
+                        if session.cam.rawSupported && !settings.fujiMode {
                             pill(session.cam.rawIsProRAW ? "ProRAW" : "RAW", on: session.cam.rawOn, label: "RAW capture") { session.toggleRaw() }
                         }
                         Spacer()
@@ -164,9 +177,13 @@ struct CameraScreen: View {
                     }
                     .padding(10)
                     Spacer()
-                    if session.cam.lenses.count > 1 { lensChips }
+                    if settings.fujiMode {
+                        FujiCropChips()
+                    } else if session.cam.lenses.count > 1 {
+                        lensChips
+                    }
                     if case .idle = session.director {
-                        CueHUD()
+                        if settings.fujiMode { FujiCard() } else { CueHUD() }
                     } else {
                         DirectorPanel()
                     }

@@ -541,3 +541,128 @@ final class HeadingTests: XCTestCase {
         XCTAssertNil(LensHeading.heading(m: flat, gravity: (0, 0, -1), side: .back))
     }
 }
+
+final class FujiPlannerTests: XCTestCase {
+    /// Exposure the plan delivers, as EV100 it is correct for.
+    func plannedEV(_ p: FujiPlan) -> Double {
+        log2(p.aperture * p.aperture / p.shutter) - log2(Double(p.iso) / 100) + (p.nd ? 4 : 0) + p.compensation
+    }
+
+    func testSunnyPortraitUsesNDAtF2() {
+        let p = FujiPlanner.plan(FujiInput(ev100: 15, intent: .portrait, people: 1))
+        XCTAssertEqual(p.aperture, 2)
+        XCTAssertTrue(p.nd)
+        XCTAssertEqual(p.shutterKind, .mechanical)
+        XCTAssertGreaterThanOrEqual(p.shutter, FujiPlanner.leafLimit(aperture: 2) * 0.99)
+        XCTAssertEqual(plannedEV(p), 15, accuracy: 0.4)
+        XCTAssertEqual(p.recipe.look, .soft)
+    }
+
+    func testSunnyStreetStaysAtF8WithoutND() {
+        let p = FujiPlanner.plan(FujiInput(ev100: 15, intent: .street))
+        XCTAssertEqual(p.aperture, 8)
+        XCTAssertFalse(p.nd)
+        XCTAssertLessThanOrEqual(p.shutter, 1.0 / 500)
+        XCTAssertTrue(p.focus.hasPrefix("MF zone focus"))
+        XCTAssertEqual(plannedEV(p), 15, accuracy: 0.4)
+    }
+
+    func testIndoorPortraitRaisesISO() {
+        // EV 7: a bright living room.
+        let p = FujiPlanner.plan(FujiInput(ev100: 7, intent: .portrait, people: 1))
+        XCTAssertEqual(p.aperture, 2)
+        XCTAssertLessThanOrEqual(p.shutter, 1.0 / 200)
+        XCTAssertGreaterThanOrEqual(p.iso, 640)
+        XCTAssertEqual(plannedEV(p), 7, accuracy: 0.4)
+    }
+
+    func testDarkNightWarns() {
+        let p = FujiPlanner.plan(FujiInput(ev100: 0, intent: .night))
+        XCTAssertEqual(p.aperture, 2)
+        XCTAssertFalse(p.warnings.isEmpty)
+        XCTAssertEqual(p.recipe.look, .night)
+    }
+
+    func testBacklitPortraitGetsPlusCompAndFillFlash() {
+        let p = FujiPlanner.plan(FujiInput(ev100: 14, intent: .portrait, people: 1, backlightStops: 2))
+        XCTAssertGreaterThan(p.compensation, 0.6)
+        XCTAssertNotNil(p.flash)
+        XCTAssertEqual(plannedEV(p), 14, accuracy: 0.4)
+    }
+
+    func testActionPrefersElectronicOverND() {
+        let p = FujiPlanner.plan(FujiInput(ev100: 16, intent: .action))
+        XCTAssertFalse(p.nd)
+        XCTAssertLessThanOrEqual(p.shutter, 1.0 / 1000)
+    }
+
+    func testAutoIntent() {
+        XCTAssertEqual(FujiPlanner.resolveIntent(FujiInput(ev100: 12, people: 4)), .group)
+        XCTAssertEqual(FujiPlanner.resolveIntent(FujiInput(ev100: 12, people: 1)), .portrait)
+        XCTAssertEqual(FujiPlanner.resolveIntent(FujiInput(ev100: 3)), .night)
+        XCTAssertEqual(FujiPlanner.resolveIntent(FujiInput(ev100: 13)), .landscape)
+    }
+
+    func testDynamicRangeFollowsISO() {
+        // Bright, contrasty portrait: base ISO cannot run DR400.
+        let p = FujiPlanner.plan(FujiInput(ev100: 15, intent: .landscape, highlightClip: 0.1))
+        if p.iso < 250 { XCTAssertEqual(p.dynamicRange, 100) }
+        if p.iso >= 500 { XCTAssertLessThanOrEqual(p.dynamicRange, 400) }
+    }
+
+    func testOptics() {
+        // 23mm at f/8 with c = 0.02 mm: hyperfocal about 3.3 m.
+        XCTAssertEqual(FujiOptics.hyperfocal(aperture: 8), 3.33, accuracy: 0.05)
+        let d = FujiOptics.depthOfField(distance: 2, aperture: 2)
+        XCTAssertLessThan(d.near, 2)
+        XCTAssertGreaterThan(d.far, 2)
+        XCTAssertLessThan(d.far - d.near, 1.0)
+        // A face 30% of a portrait frame's width at 35mm is about 0.8 m away.
+        XCTAssertEqual(FujiOptics.distance(faceWidth: 0.3, focalEquivalent: 35, frameWidthEquivalent: 24) ?? 0, 0.78, accuracy: 0.05)
+    }
+
+    func testMeterAndZoomMath() {
+        // f/1.78, 1/100 s, ISO 100 is EV ~8.3.
+        XCTAssertEqual(FujiPlanner.ev100(aperture: 1.78, exposureSeconds: 0.01, iso: 100), 8.3, accuracy: 0.05)
+        // A 24mm-equivalent camera (73.7° horizontal) zooms 35/24 ≈ 1.46x.
+        XCTAssertEqual(FujiPlanner.zoomFactor(forEquivalent: 35, deviceHorizontalFOV: 73.74), 35.0 / 24, accuracy: 0.02)
+    }
+
+    func testFormatting() {
+        XCTAssertEqual(FujiFormat.shutter(1.0 / 500), "1/500")
+        XCTAssertEqual(FujiFormat.shutter(2), "2s")
+        XCTAssertEqual(FujiFormat.aperture(2.8), "f/2.8")
+        XCTAssertEqual(FujiFormat.aperture(8), "f/8")
+        XCTAssertEqual(FujiFormat.compensation(2.0 / 3), "+2/3")
+        XCTAssertEqual(FujiFormat.compensation(-4.0 / 3), "−1 1/3")
+        XCTAssertEqual(FujiFormat.compensation(0), "±0")
+    }
+
+    func testSettingsAreOnTheCamerasScales() {
+        for ev in stride(from: -2.0, through: 17, by: 1) {
+            for intent in FujiIntent.allCases {
+                let p = FujiPlanner.plan(FujiInput(ev100: ev, intent: intent, people: intent == .group ? 4 : 1))
+                XCTAssertTrue(FujiScale.apertures.contains(p.aperture))
+                XCTAssertTrue(FujiScale.isos.contains(p.iso))
+                XCTAssertTrue(FujiScale.shutters.contains(p.shutter))
+                if p.shutterKind == .mechanical {
+                    XCTAssertGreaterThanOrEqual(p.shutter, 1.0 / 4000 * 0.99, "ev \(ev) \(intent)")
+                }
+            }
+        }
+    }
+}
+
+final class DirectorCameraTests: XCTestCase {
+    func testCameraContextAndTip() {
+        let ctx = DirectorContext(mode: .portrait, side: .back, zoom: 1.5, elevation: 0, levelError: 0, people: 1,
+                                  localTime: "5:10 PM", camera: "Fujifilm X100VI, f/2, 1/640, ISO 125, ND on")
+        let p = Director.prompt(ctx)
+        XCTAssertTrue(p.contains("Final camera: Fujifilm X100VI"))
+        XCTAssertTrue(p.contains("camera_tip"))
+        XCTAssertFalse(Director.prompt(DirectorContext(mode: .portrait, side: .back, zoom: 1, elevation: 0, levelError: 0,
+                                                       people: 1, localTime: "x")).contains("camera_tip"))
+        let a = Director.parse(#"{"headline": "h", "moves": [], "camera_tip": "Drop to f/2.8 for two faces."}"#, side: .back)
+        XCTAssertEqual(a?.cameraTip, "Drop to f/2.8 for two faces.")
+    }
+}
