@@ -237,6 +237,8 @@ public enum GooglePlaces {
         r.setValue("application/json", forHTTPHeaderField: "Content-Type")
         r.setValue(key, forHTTPHeaderField: "X-Goog-Api-Key")
         r.setValue(fieldMask, forHTTPHeaderField: "X-Goog-FieldMask")
+        // Lets a key restricted to "iOS apps" in Google Cloud accept these direct REST calls.
+        r.setValue("com.eitanshay.roam", forHTTPHeaderField: "X-Ios-Bundle-Identifier")
         r.httpBody = try? JSONSerialization.data(withJSONObject: body)
         return r
     }
