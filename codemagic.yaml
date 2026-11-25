@@ -115,9 +115,18 @@ workflows:
               app-store-connect profiles list --type IOS_APP_STORE --state ACTIVE --name "$PNAME" --profiles-dir /tmp/roam_profiles --save
             fi
           done
+          # Xcode only sees profiles in its own folders (both the old and the Xcode 16+ location).
+          for D in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$D"
+            for F in /tmp/roam_profiles/*.mobileprovision; do
+              UUID=$(security cms -D -i "$F" | plutil -extract UUID raw -o - -)
+              cp "$F" "$D/$UUID.mobileprovision"
+            done
+          done
           ls -la /tmp/roam_profiles
       - name: Set up code signing on the Xcode project
         script: |
+          set -eo pipefail
           echo "use-profiles" > /tmp/roam_stage
           xcode-project use-profiles --project "$CM_BUILD_DIR/$XCODE_PROJECT" --profile /tmp/roam_profiles/*.mobileprovision
       - name: Increment build number
@@ -130,6 +139,7 @@ workflows:
           agvtool new-version -all $((${LATEST:-0} + 1))
       - name: Build ipa
         script: |
+          set -eo pipefail
           echo "compile" > /tmp/roam_stage
           xcode-project build-ipa --project "$CM_BUILD_DIR/$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
           echo "built" > /tmp/roam_stage
@@ -139,6 +149,7 @@ workflows:
             echo "built, no app record yet" > /tmp/roam_stage
             echo "No App Store Connect app record for $ROAM_BUNDLE_ID yet; skipping upload."
           else
+            set -eo pipefail
             echo "upload" > /tmp/roam_stage
             app-store-connect publish --path build/ios/ipa/*.ipa
             echo "uploaded to app $ROAM_APP_ID" > /tmp/roam_stage
