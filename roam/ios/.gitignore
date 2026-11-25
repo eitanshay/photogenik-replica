@@ -1,0 +1,7 @@
+xcuserdata/
+*.xcuserstate
+DerivedData/
+RoamCore/.build/
+RoamCore/.swiftpm/
+build/
+.DS_Store

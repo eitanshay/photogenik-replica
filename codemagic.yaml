@@ -29,7 +29,6 @@ workflows:
       changeset:
         includes:
           - "ios/**"
-          - "codemagic.yaml"
     scripts:
       - name: Run core unit tests
         script: |
@@ -57,3 +56,105 @@ workflows:
         # Upload only. Internal testers (you) get the build in TestFlight once Apple finishes processing,
         # with no beta review. Set to true and add beta_groups only for external testers.
         submit_to_testflight: false
+
+  # roam (ES-11), the travel companion in roam/ios. Bundle IDs and App Store profiles are created on the fly
+  # through the App Store Connect API (no portal steps). The frame signing block below is only there so
+  # Codemagic installs the team's distribution certificate into the build keychain.
+  roam-ios-testflight:
+    name: roam iOS to TestFlight
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: eitanshay
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.eitanshay.frame
+      vars:
+        XCODE_PROJECT: "roam/ios/Roam.xcodeproj"
+        XCODE_SCHEME: "Roam"
+        ROAM_BUNDLE_ID: com.eitanshay.roam
+        ROAM_TOPIC: roam-ci-b6b785e2293fa965
+      xcode: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    when:
+      changeset:
+        includes:
+          - "roam/**"
+    scripts:
+      - name: Run core unit tests
+        script: |
+          set -o pipefail
+          echo "unit tests" > /tmp/roam_stage
+          cd "$CM_BUILD_DIR/roam/ios/RoamCore"
+          swift test 2>&1 | tee /tmp/roam_tests.log
+      - name: Create bundle IDs and App Store profiles
+        script: |
+          set -eo pipefail
+          echo "signing" > /tmp/roam_stage
+          mkdir -p /tmp/roam_profiles
+          CERTS=$(app-store-connect certificates list --type DISTRIBUTION IOS_DISTRIBUTION --json | python3 -c 'import json,sys; print(" ".join(c["id"] for c in json.load(sys.stdin)))')
+          echo "distribution certificates: $CERTS"
+          for PAIR in "com.eitanshay.roam|roam" "com.eitanshay.roam.share|roam share"; do
+            ID="${PAIR%%|*}"; NAME="${PAIR#*|}"
+            RES=$(app-store-connect bundle-ids list --bundle-id-identifier "$ID" --strict-match-identifier --platform IOS --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["id"] if d else "")')
+            if [ -z "$RES" ]; then
+              RES=$(app-store-connect bundle-ids create "$ID" --name "$NAME" --platform IOS --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+              echo "created bundle ID $ID"
+            fi
+            PNAME="$NAME App Store CI"
+            FOUND=$(app-store-connect profiles list --type IOS_APP_STORE --state ACTIVE --name "$PNAME" --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')
+            if [ "$FOUND" = "0" ]; then
+              app-store-connect profiles create "$RES" --certificate-ids $CERTS --type IOS_APP_STORE --name "$PNAME" --profiles-dir /tmp/roam_profiles --save
+            else
+              app-store-connect profiles list --type IOS_APP_STORE --state ACTIVE --name "$PNAME" --profiles-dir /tmp/roam_profiles --save
+            fi
+          done
+          ls -la /tmp/roam_profiles
+      - name: Set up code signing on the Xcode project
+        script: |
+          echo "use-profiles" > /tmp/roam_stage
+          xcode-project use-profiles --project "$CM_BUILD_DIR/$XCODE_PROJECT" --profile /tmp/roam_profiles/*.mobileprovision
+      - name: Increment build number
+        script: |
+          APP_ID=$(app-store-connect apps list --bundle-id-identifier "$ROAM_BUNDLE_ID" --strict-match-identifier --json 2>/dev/null | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d[0]["id"] if d else "")' || true)
+          echo "ROAM_APP_ID=$APP_ID" >> $CM_ENV
+          LATEST=0
+          if [ -n "$APP_ID" ]; then LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_ID" 2>/dev/null || echo 0); fi
+          cd "$CM_BUILD_DIR/roam/ios"
+          agvtool new-version -all $((${LATEST:-0} + 1))
+      - name: Build ipa
+        script: |
+          echo "compile" > /tmp/roam_stage
+          xcode-project build-ipa --project "$CM_BUILD_DIR/$XCODE_PROJECT" --scheme "$XCODE_SCHEME"
+          echo "built" > /tmp/roam_stage
+      - name: Upload to App Store Connect
+        script: |
+          if [ -z "$ROAM_APP_ID" ]; then
+            echo "built, no app record yet" > /tmp/roam_stage
+            echo "No App Store Connect app record for $ROAM_BUNDLE_ID yet; skipping upload."
+          else
+            echo "upload" > /tmp/roam_stage
+            app-store-connect publish --path build/ios/ipa/*.ipa
+            echo "uploaded to app $ROAM_APP_ID" > /tmp/roam_stage
+          fi
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      scripts:
+        - name: Report status (compiler errors only) to the build channel
+          script: |
+            STAGE=$(cat /tmp/roam_stage 2>/dev/null || echo "setup")
+            {
+              echo "roam build $CM_BUILD_ID commit ${CM_COMMIT:0:7}"
+              echo "last stage: $STAGE"
+              grep -h -E "error:|Executed .* tests|failed" /tmp/roam_tests.log 2>/dev/null | sort -u | head -20
+              grep -h -E "error:" /tmp/xcodebuild_logs/*.log 2>/dev/null | sed "s#$CM_BUILD_DIR/##" | sort -u | head -60
+            } > /tmp/roam_report.txt
+            curl -s -m 20 -H "Title: roam CI" --data-binary @/tmp/roam_report.txt "https://ntfy.sh/$ROAM_TOPIC" > /dev/null || true
