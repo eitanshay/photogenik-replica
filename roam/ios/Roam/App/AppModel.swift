@@ -100,7 +100,8 @@ final class AppModel {
         switch settings.tripMode {
         case .on: return true
         case .off: return false
-        case .auto: return AlertPolicy.isTripMode(here: here, home: settings.home)
+        // No home set yet: treat everywhere as a trip, so discovery works out of the box while traveling.
+        case .auto: return settings.home == nil || AlertPolicy.isTripMode(here: here, home: settings.home)
         }
     }
 

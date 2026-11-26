@@ -20,6 +20,7 @@ struct PlacesScreen: View {
     @State private var query = ""
     @State private var importing = false
     @State private var adding = false
+    @State private var discovering = false
 
     private var items: [Place] {
         let q = Place.fold(query)
@@ -62,6 +63,24 @@ struct PlacesScreen: View {
                 Section {
                     if items.isEmpty {
                         Text(emptyText).font(ESFont.small).foregroundStyle(ES.ink2)
+                        if filter != .saved {
+                            Button(discovering ? "Looking around…" : "Look for sights around me now") {
+                                Task {
+                                    discovering = true
+                                    defer { discovering = false }
+                                    guard let loc = try? await LocationEngine.shared.currentLocation(maxAge: 300) else {
+                                        model.toast = "Couldn't get your location"
+                                        return
+                                    }
+                                    model.here = loc.coord
+                                    await model.refreshDiscoveryIfNeeded(at: loc.coord, force: true)
+                                    model.replan(from: loc.coord)
+                                    let n = model.library.discovered.count
+                                    model.toast = n == 0 ? "Nothing notable found within 10 km" : "Found \(n) sights and scenic spots"
+                                }
+                            }
+                            .disabled(discovering)
+                        }
                     }
                     ForEach(items.prefix(300)) { p in
                         Button { model.detailPlaceID = p.id } label: {
