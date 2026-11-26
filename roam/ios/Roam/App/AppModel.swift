@@ -354,7 +354,7 @@ final class AppModel {
     func handleNotification(action: String, placeID: String) {
         switch action {
         case Notifier.listen:
-            tab = .now
+            sheet = nil
             detailPlaceID = placeID
             autoplayPlaceID = placeID
         case Notifier.navigate:
@@ -364,7 +364,7 @@ final class AppModel {
         case Notifier.mute:
             setMuted(placeID, true)
         default:
-            tab = .now
+            sheet = nil
             detailPlaceID = placeID
         }
     }
