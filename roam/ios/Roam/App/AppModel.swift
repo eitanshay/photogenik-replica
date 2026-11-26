@@ -3,7 +3,11 @@ import Foundation
 import Observation
 import UIKit
 
-enum AppTab: Hashable { case now, map, places, trips, settings }
+/// Secondary screens, opened from the map's menu.
+enum AppSheet: String, Identifiable {
+    case places, trips, settings
+    var id: String { rawValue }
+}
 
 /// The app's brain: owns the place library, reacts to location wake-ups, decides what to notify.
 @MainActor
@@ -18,7 +22,7 @@ final class AppModel {
     var here: Coordinate?
     var city: String?
     var trips: [Trip] = []
-    var tab: AppTab = .now
+    var sheet: AppSheet?
     var detailPlaceID: String?
     var autoplayPlaceID: String?
     var toast: String?

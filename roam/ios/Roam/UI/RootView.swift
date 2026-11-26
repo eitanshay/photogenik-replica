@@ -9,36 +9,36 @@ struct RootView: View {
         @Bindable var model = model
         Group {
             if settings.onboarded {
-                TabView(selection: $model.tab) {
-                    NowScreen()
-                        .tabItem { Label("Now", systemImage: "location.north.circle") }
-                        .tag(AppTab.now)
-                    MapScreen()
-                        .tabItem { Label("Map", systemImage: "map") }
-                        .tag(AppTab.map)
-                    PlacesScreen()
-                        .tabItem { Label("Places", systemImage: "bookmark") }
-                        .tag(AppTab.places)
-                    TripsScreen()
-                        .tabItem { Label("Trips", systemImage: "suitcase") }
-                        .tag(AppTab.trips)
-                    SettingsScreen()
-                        .tabItem { Label("Settings", systemImage: "gearshape") }
-                        .tag(AppTab.settings)
-                }
-                .tint(ES.ink)
+                // One screen: the map. Everything else opens from its menu.
+                MapHome()
+                    .tint(ES.ink)
             } else {
                 OnboardingView()
             }
         }
-        .sheet(item: Binding(get: { model.detailPlaceID.map(IDBox.init) }, set: { model.detailPlaceID = $0?.id })) { box in
+        .sheet(item: $model.sheet) { s in
+            Group {
+                switch s {
+                case .places: PlacesScreen()
+                case .trips: TripsScreen()
+                case .settings: SettingsScreen()
+                }
+            }
+            .presentationDragIndicator(.visible)
+            .sheet(item: detailBinding(whenSheet: true)) { box in
+                PlaceDetailView(placeID: box.id)
+                    .presentationDetents([.large])
+            }
+        }
+        // A place page opens over the map, or over Places or Trips when one of those is up.
+        .sheet(item: detailBinding(whenSheet: false)) { box in
             PlaceDetailView(placeID: box.id)
                 .presentationDetents([.large])
         }
         .overlay(alignment: .bottom) {
             if let t = model.toast {
                 ToastView(message: t)
-                    .padding(.bottom, 70)
+                    .padding(.bottom, 230)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .task(id: t) {
                         try? await Task.sleep(for: .seconds(3.5))
@@ -47,6 +47,15 @@ struct RootView: View {
             }
         }
         .animation(ES.ease, value: model.toast)
+    }
+}
+
+extension RootView {
+    func detailBinding(whenSheet: Bool) -> Binding<IDBox?> {
+        Binding(get: {
+            guard (model.sheet != nil) == whenSheet else { return nil }
+            return model.detailPlaceID.map(IDBox.init)
+        }, set: { model.detailPlaceID = $0?.id })
     }
 }
 

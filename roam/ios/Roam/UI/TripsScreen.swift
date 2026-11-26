@@ -30,7 +30,7 @@ struct TripsScreen: View {
                             Text("Connect Google Docs").font(ESFont.sans(17, .semibold))
                             Text("Sign in to your personal Google account in Settings to see trip docs here and pull their places onto your map.")
                                 .font(ESFont.small).foregroundStyle(ES.ink2)
-                            Button("Open Settings") { model.tab = .settings }.buttonStyle(PillButtonStyle(kind: .secondary, size: .sm))
+                            Button("Open Settings") { model.sheet = .settings }.buttonStyle(PillButtonStyle(kind: .secondary, size: .sm))
                         }
                         .raisedSurface()
                     }

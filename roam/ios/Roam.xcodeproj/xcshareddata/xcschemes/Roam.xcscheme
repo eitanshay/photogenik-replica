@@ -14,7 +14,7 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "1F489B996C45126A5834EFC5"
+               BlueprintIdentifier = "D555CA06F23B6B6C90CAB71F"
                BuildableName = "Roam.app"
                BlueprintName = "Roam"
                ReferencedContainer = "container:Roam.xcodeproj">
@@ -30,7 +30,7 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1F489B996C45126A5834EFC5"
+            BlueprintIdentifier = "D555CA06F23B6B6C90CAB71F"
             BuildableName = "Roam.app"
             BlueprintName = "Roam"
             ReferencedContainer = "container:Roam.xcodeproj">
@@ -53,7 +53,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1F489B996C45126A5834EFC5"
+            BlueprintIdentifier = "D555CA06F23B6B6C90CAB71F"
             BuildableName = "Roam.app"
             BlueprintName = "Roam"
             ReferencedContainer = "container:Roam.xcodeproj">
@@ -70,7 +70,7 @@
          runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "1F489B996C45126A5834EFC5"
+            BlueprintIdentifier = "D555CA06F23B6B6C90CAB71F"
             BuildableName = "Roam.app"
             BlueprintName = "Roam"
             ReferencedContainer = "container:Roam.xcodeproj">

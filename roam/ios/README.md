@@ -16,7 +16,7 @@ A travel companion for one person (or each family member on their own phone). It
 | **Restroom** | The nearest: OpenStreetMap public toilets, Refuge Restrooms, Apple Maps. If none is mapped, places that usually have one (libraries, stations, cafes). |
 | **Two-minute audio guide** | Wikipedia text rewritten for the ear by Claude (230 to 280 words), read by the best on-device iOS voice. Free and offline once written. Without a Claude key it reads the start of the article. |
 | **Trips** | Calendar events more than 100 km from home are grouped into trips. With Google connected, roam finds the Docs that mention each destination and can pull every place in a doc onto your map ("Add places"). |
-| **Map** | All your places on Google Maps (saved orange, sights dark, scenic amber); tap a pin, then its label, to open it. Needs "Maps SDK for iOS" enabled on the same Google key; falls back to Apple Maps without a key. |
+| **One screen: the map** | Everything happens on a single map. Chips along the top choose what is on it: **Saved** (orange bookmark), **Sights** (dark columns), **Scenic** (amber camera) from your library, and **Coffee** (brown cup), **Food** (red fork and knife, a star for Michelin) and **Restroom** (blue) searched around you when you tap them. Food adds budget and cuisine chips. Tap a pin for a card: walking time and distance, rank or rating (★ 4.7 (1.2k), price, open or closed, Michelin award), a few words, and Walk, Listen, Save, More or List. Arrows on the card step through the same kind of pin in rank or distance order. Places and import, Trips and Settings open from the menu at the top left. Google Maps needs "Maps SDK for iOS" on the same key; without a key the same map runs on Apple Maps. |
 | **Navigation** | Hands off to Apple Maps or Google Maps for walking directions. |
 
 ## Battery
@@ -34,7 +34,7 @@ No continuous GPS at any point.
 | --- | --- | --- |
 | Google Maps Platform key (Places API (New) enabled) | Coffee and food ratings, open now, accurate import | Apple Maps results with no ratings; coffee is weak |
 | Anthropic key | Stories written for the ear, reading trip docs | Stories are the start of the Wikipedia article; no doc import |
-| Google sign-in (iOS OAuth client ID) | Finding trip docs in your Drive | Trips tab shows calendar trips only |
+| Google sign-in (iOS OAuth client ID) | Finding trip docs in your Drive | Trips shows calendar trips only |
 
 All keys live in the Keychain. The Google refresh token too.
 
