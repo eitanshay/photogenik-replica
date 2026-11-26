@@ -13,6 +13,9 @@ struct RootView: View {
                     NowScreen()
                         .tabItem { Label("Now", systemImage: "location.north.circle") }
                         .tag(AppTab.now)
+                    MapScreen()
+                        .tabItem { Label("Map", systemImage: "map") }
+                        .tag(AppTab.map)
                     PlacesScreen()
                         .tabItem { Label("Places", systemImage: "bookmark") }
                         .tag(AppTab.places)

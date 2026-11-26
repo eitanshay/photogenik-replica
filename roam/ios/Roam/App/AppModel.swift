@@ -3,7 +3,7 @@ import Foundation
 import Observation
 import UIKit
 
-enum AppTab: Hashable { case now, places, trips, settings }
+enum AppTab: Hashable { case now, map, places, trips, settings }
 
 /// The app's brain: owns the place library, reacts to location wake-ups, decides what to notify.
 @MainActor

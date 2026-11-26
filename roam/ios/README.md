@@ -16,6 +16,7 @@ A travel companion for one person (or each family member on their own phone). It
 | **Restroom** | The nearest: OpenStreetMap public toilets, Refuge Restrooms, Apple Maps. If none is mapped, places that usually have one (libraries, stations, cafes). |
 | **Two-minute audio guide** | Wikipedia text rewritten for the ear by Claude (230 to 280 words), read by the best on-device iOS voice. Free and offline once written. Without a Claude key it reads the start of the article. |
 | **Trips** | Calendar events more than 100 km from home are grouped into trips. With Google connected, roam finds the Docs that mention each destination and can pull every place in a doc onto your map ("Add places"). |
+| **Map** | All your places on Google Maps (saved orange, sights dark, scenic amber); tap a pin, then its label, to open it. Needs "Maps SDK for iOS" enabled on the same Google key; falls back to Apple Maps without a key. |
 | **Navigation** | Hands off to Apple Maps or Google Maps for walking directions. |
 
 ## Battery

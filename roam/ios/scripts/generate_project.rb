@@ -101,6 +101,19 @@ share.build_configurations.each do |config|
   s['LD_RUNPATH_SEARCH_PATHS'] = ['$(inherited)', '@executable_path/Frameworks', '@executable_path/../../Frameworks']
 end
 
+# Google Maps SDK (Swift Package) for the Map tab; app target only.
+maps_pkg = project.new(Xcodeproj::Project::Object::XCRemoteSwiftPackageReference)
+maps_pkg.repositoryURL = 'https://github.com/googlemaps/ios-maps-sdk'
+maps_pkg.requirement = { 'kind' => 'upToNextMajorVersion', 'minimumVersion' => '11.4.0' }
+project.root_object.package_references << maps_pkg
+maps_dep = project.new(Xcodeproj::Project::Object::XCSwiftPackageProductDependency)
+maps_dep.package = maps_pkg
+maps_dep.product_name = 'GoogleMaps'
+app.package_product_dependencies << maps_dep
+maps_bf = project.new(Xcodeproj::Project::Object::PBXBuildFile)
+maps_bf.product_ref = maps_dep
+app.frameworks_build_phase.files << maps_bf
+
 # Embed the extension in the app.
 app.add_dependency(share)
 embed = app.new_copy_files_build_phase('Embed Foundation Extensions')
