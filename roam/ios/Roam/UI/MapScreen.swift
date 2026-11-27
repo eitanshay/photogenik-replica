@@ -191,15 +191,20 @@ struct MapHome: View {
     @Environment(SettingsStore.self) private var settings
     @State private var map = MapModel()
     @State private var listNeed: Need?
+    /// Set when Google map tiles never arrived (key missing Maps SDK for iOS, or offline); falls back to Apple Maps.
+    @State private var googleTilesFailed = false
 
     var body: some View {
         let pins = map.pins(model)
         let selected = pins.first { $0.id == map.selectedID }
         ZStack {
             Group {
-                if settings.hasGoogleKey {
+                if settings.hasGoogleKey && settings.useGoogleMap && !googleTilesFailed {
                     GoogleMapView(pins: pins, selectedID: map.selectedID, focus: map.focus, center: model.here,
-                                  apiKey: settings.googleMapsKey) { id in
+                                  apiKey: settings.googleMapsKey, onTilesFailed: {
+                                      googleTilesFailed = true
+                                      model.toast = "Google's map didn't load, so this is Apple Maps. Enable \"Maps SDK for iOS\" on your Google key (Settings explains)."
+                                  }) { id in
                         map.selectedID = id
                     }
                 } else {
@@ -512,6 +517,7 @@ struct GoogleMapView: UIViewRepresentable {
     let focus: MapFocus?
     let center: Coordinate?
     let apiKey: String
+    var onTilesFailed: () -> Void = {}
     var onSelect: (String?) -> Void
 
     private static var keyProvided = false
@@ -532,6 +538,13 @@ struct GoogleMapView: UIViewRepresentable {
         map.settings.compassButton = true
         map.padding = UIEdgeInsets(top: 120, left: 0, bottom: 210, right: 0)
         map.delegate = context.coordinator
+        // Markers draw even when Google rejects the key, but the streets do not. If no tiles arrive in time,
+        // hand over to Apple Maps instead of showing pins on a blank grid.
+        let co = context.coordinator
+        let failed = onTilesFailed
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+            if !co.tilesRendered { failed() }
+        }
         return map
     }
 
@@ -577,6 +590,12 @@ struct GoogleMapView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, GMSMapViewDelegate {
+        var tilesRendered = false
+
+        func mapViewDidFinishTileRendering(_ mapView: GMSMapView) {
+            tilesRendered = true
+        }
+
         var onSelect: (String?) -> Void
         var markers: [String: GMSMarker] = [:]
         var looks: [String: String] = [:]

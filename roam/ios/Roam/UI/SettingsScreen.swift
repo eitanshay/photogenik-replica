@@ -27,7 +27,7 @@ struct SettingsScreen: View {
                 } header: {
                     Text("Keys")
                 } footer: {
-                    Text("Google Maps key (Places API (New) enabled): ratings and open-now for coffee and food, and accurate import. Without it roam uses Apple Maps. Anthropic key: writes the 2-minute stories and reads trip docs. Without it stories are the start of the Wikipedia article.")
+                    Text("Google Maps key: enable Places API (New) for coffee and food ratings and open-now, and Maps SDK for iOS for the map's streets. Without a key roam uses Apple Maps. Anthropic key: writes the 2-minute stories and reads trip docs. Without it stories are the start of the Wikipedia article.")
                 }
 
                 Section {
@@ -106,6 +106,7 @@ struct SettingsScreen: View {
 
                 Section("Display") {
                     Toggle("Metric units", isOn: $settings.metric)
+                    Toggle("Google map (off: Apple Maps)", isOn: $settings.useGoogleMap)
                     Picker("Walk with", selection: $settings.navApp) {
                         ForEach(NavApp.allCases) { Text($0.label).tag($0) }
                     }
