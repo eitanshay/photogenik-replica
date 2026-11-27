@@ -106,7 +106,7 @@ struct SettingsScreen: View {
 
                 Section("Display") {
                     Toggle("Metric units", isOn: $settings.metric)
-                    Toggle("Google map (off: Apple Maps)", isOn: $settings.useGoogleMap)
+                    Toggle("Use Google map (needs Maps SDK for iOS on your key)", isOn: $settings.useGoogleMap)
                     Picker("Walk with", selection: $settings.navApp) {
                         ForEach(NavApp.allCases) { Text($0.label).tag($0) }
                     }

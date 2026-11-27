@@ -43,7 +43,7 @@ final class SettingsStore {
 
     var metric: Bool { didSet { d.set(metric, forKey: "metric") } }
     var navApp: NavApp { didSet { d.set(navApp.rawValue, forKey: "navApp") } }
-    var useGoogleMap: Bool { didSet { d.set(useGoogleMap, forKey: "useGoogleMap") } }
+    var useGoogleMap: Bool { didSet { d.set(useGoogleMap, forKey: "useGoogleMapV2") } }
     var speechRate: Double { didSet { d.set(speechRate, forKey: "speechRate") } }
     var wikiLang: String { didSet { d.set(wikiLang, forKey: "wikiLang") } }
     var lastBudget: String { didSet { d.set(lastBudget, forKey: "lastBudget") } }
@@ -67,7 +67,7 @@ final class SettingsStore {
         quietEnd = d.object(forKey: "quietEnd") as? Int ?? 8
         metric = d.object(forKey: "metric") as? Bool ?? (Locale.current.measurementSystem != .us)
         navApp = NavApp(rawValue: d.string(forKey: "navApp") ?? "") ?? .apple
-        useGoogleMap = d.object(forKey: "useGoogleMap") as? Bool ?? true
+        useGoogleMap = d.object(forKey: "useGoogleMapV2") as? Bool ?? false
         speechRate = d.object(forKey: "speechRate") as? Double ?? 0.5
         wikiLang = d.string(forKey: "wikiLang") ?? "en"
         lastBudget = d.string(forKey: "lastBudget") ?? Budget.mid.rawValue
