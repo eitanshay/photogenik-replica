@@ -31,6 +31,8 @@ final class AppModel {
     var locationStatus: CLAuthorizationStatus = .notDetermined
 
     private var alertLog: [AlertLogEntry]
+    /// Google Maps list links shared from the share sheet, imported the next time the app is open.
+    private var pendingLists: [String] = []
     private var lastDiscovery: (center: Coordinate, date: Date)?
     private var cityCenter: Coordinate?
     private var generating = Set<String>()
@@ -52,7 +54,7 @@ final class AppModel {
            let t = d.object(forKey: "discDate") as? Date {
             lastDiscovery = (Coordinate(lat: lat, lng: lng), t)
         }
-        SharedInbox.drain(into: &library)
+        drainShared()
     }
 
     // MARK: Launch wiring
@@ -87,11 +89,13 @@ final class AppModel {
 
     /// Foreground: pick up share-sheet saves, refresh location once, re-plan.
     func becameActive() async {
-        let added = SharedInbox.drain(into: &library)
-        if !added.isEmpty {
-            save()
-            toast = added.count == 1 ? "Saved from the share sheet" : "Saved \(added.count) places from the share sheet"
+        let added = drainShared()
+        if added > 0 {
+            toast = added == 1 ? "Saved from the share sheet" : "Saved \(added) places from the share sheet"
         }
+        let lists = pendingLists
+        pendingLists.removeAll()
+        for link in lists { toast = await importGoogleList(link) }
         if let loc = try? await LocationEngine.shared.currentLocation(maxAge: 300) {
             await handleMove(loc)
         }
@@ -166,7 +170,7 @@ final class AppModel {
     func handleMove(_ loc: CLLocation) async {
         let c = loc.coord
         here = c
-        if !SharedInbox.drain(into: &library).isEmpty { save() }
+        drainShared()
         if cityCenter.map({ Geo.distance($0, c) > 5_000 }) ?? true {
             city = await Geocode.city(c)
             cityCenter = c
@@ -238,6 +242,46 @@ final class AppModel {
 
     // MARK: Saved places
 
+    /// Moves share-sheet items into the library; list links are queued for import. Returns places added.
+    @discardableResult
+    func drainShared() -> Int {
+        let items = SharedInbox.read()
+        guard !items.isEmpty else { return 0 }
+        SharedInbox.clear()
+        var n = 0
+        for p in items {
+            if p.lists.contains(GoogleList.marker), let u = p.url {
+                if !pendingLists.contains(u) { pendingLists.append(u) }
+            } else {
+                library.upsert(p)
+                n += 1
+            }
+        }
+        save()
+        return n
+    }
+
+    /// Imports every place in a shared Google Maps list (link from Share on a list). Returns a status line.
+    func importGoogleList(_ link: String) async -> String {
+        let trimmed = link.trimmingCharacters(in: .whitespacesAndNewlines)
+        let urlText = MapsLink.parseShareText(trimmed).url ?? trimmed
+        let full = await NearbyService.expand(urlText)
+        guard let id = GoogleList.listID(in: full) ?? GoogleList.listID(in: urlText) else {
+            return "That link isn't a Google Maps list. In Google Maps: Saved, open the list, Share."
+        }
+        importStatus = "Reading the list from Google Maps…"
+        guard let data = try? await Net.data(GoogleList.request(listID: id)), let list = GoogleList.parse(data) else {
+            importStatus = nil
+            return "Couldn't read that list. Make sure it is shared by link, then try again."
+        }
+        let added = library.upsertMany(list.places)
+        save()
+        if let h = here { replan(from: h) }
+        let msg = "\(list.name): \(list.places.count) places (\(added) new)"
+        importStatus = msg
+        return msg
+    }
+
     func resolvePending() async {
         let pending = library.unresolved
         guard !pending.isEmpty, resolving == 0 else { return }
@@ -273,7 +317,7 @@ final class AppModel {
             } else {
                 places = Takeout.parseSavedPlacesJSON(data, listName: list == "Saved Places" ? "Starred" : list)
             }
-            for p in places { library.upsert(p) }
+            library.upsertMany(places)
             added += places.count
         }
         save()

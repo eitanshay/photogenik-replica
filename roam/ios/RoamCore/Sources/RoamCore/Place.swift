@@ -122,10 +122,51 @@ public struct PlaceLibrary: Codable, Sendable {
     /// Adds or merges. A saved place always wins over a discovered one (you keep your lists and note).
     @discardableResult
     public mutating func upsert(_ p: Place) -> String {
-        guard let i = matchIndex(for: p) else {
+        guard let i = places.firstIndex(where: { $0.id == p.id }) ?? matchIndex(for: p) else {
             places.append(p)
             return p.id
         }
+        merge(at: i, with: p)
+        return places[i].id
+    }
+
+    /// Bulk version for big imports (thousands of places): indexes once instead of scanning per place.
+    /// Returns how many places were new.
+    @discardableResult
+    public mutating func upsertMany(_ incoming: [Place]) -> Int {
+        var byID: [String: Int] = [:]
+        var byURL: [String: Int] = [:]
+        var byName: [String: [Int]] = [:]
+        func index(_ i: Int) {
+            let q = places[i]
+            byID[q.id] = i
+            if let u = q.url, !u.isEmpty { byURL[u] = i }
+            byName[Place.fold(q.name), default: []].append(i)
+        }
+        for i in places.indices { index(i) }
+        var added = 0
+        for p in incoming {
+            var hit = byID[p.id] ?? p.url.flatMap { byURL[$0] }
+            if hit == nil {
+                hit = byName[Place.fold(p.name)]?.first { i in
+                    switch (p.coordinate, places[i].coordinate) {
+                    case let (a?, b?) where a.isValid && b.isValid: return Geo.distance(a, b) < 120
+                    default: return true
+                    }
+                }
+            }
+            if let i = hit {
+                merge(at: i, with: p)
+            } else {
+                places.append(p)
+                index(places.count - 1)
+                added += 1
+            }
+        }
+        return added
+    }
+
+    private mutating func merge(at i: Int, with p: Place) {
         var q = places[i]
         if p.kind == .saved && q.kind != .saved {
             q.kind = .saved
@@ -144,7 +185,6 @@ public struct PlaceLibrary: Codable, Sendable {
         q.scenic = q.scenic || p.scenic
         if q.isDiscovered { q.score = max(q.score, p.score) }
         places[i] = q
-        return q.id
     }
 
     public mutating func update(_ p: Place) {

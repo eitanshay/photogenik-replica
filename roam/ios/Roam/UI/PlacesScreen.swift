@@ -1,4 +1,5 @@
 import MapKit
+import UIKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -21,6 +22,7 @@ struct PlacesScreen: View {
     @State private var importing = false
     @State private var adding = false
     @State private var discovering = false
+    @State private var listLink = false
 
     private var items: [Place] {
         let q = Place.fold(query)
@@ -107,6 +109,7 @@ struct PlacesScreen: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        Button("Import a Google Maps list link", systemImage: "link") { listLink = true }
                         Button("Import Google Takeout files", systemImage: "square.and.arrow.down") { importing = true }
                         Button("Add a place", systemImage: "plus") { adding = true }
                     } label: { Image(systemName: "plus.circle.fill").font(.system(size: 20)).foregroundStyle(ES.signal) }
@@ -116,6 +119,7 @@ struct PlacesScreen: View {
                 if case .success(let urls) = result { Task { await model.importFiles(urls) } }
             }
             .sheet(isPresented: $adding) { AddPlaceSheet() }
+            .sheet(isPresented: $listLink) { ListLinkSheet().presentationDetents([.medium]) }
         }
     }
 
@@ -125,7 +129,7 @@ struct PlacesScreen: View {
 
     private var emptyText: String {
         switch filter {
-        case .saved: return "Import your Google Maps lists: takeout.google.com, select only \"Saved\" (and \"Maps (your places)\" for starred places), unzip in Files, then tap + and pick the CSV files. New places: share them from Google Maps to roam."
+        case .saved: return "Fastest: in Google Maps open Saved, pick a list, Share, and choose roam (or copy the link and use + then Import a Google Maps list link). Or import your Google Maps lists: takeout.google.com, select only \"Saved\" (and \"Maps (your places)\" for starred places), unzip in Files, then tap + and pick the CSV files. New places: share them from Google Maps to roam."
         case .attraction: return "Sights appear here as you travel (Wikipedia articles about places within 10 km)."
         case .scenic: return "Viewpoints, waterfalls, lighthouses and gardens near you appear here on trips. Flag any saved place as scenic from its page."
         }
@@ -184,6 +188,11 @@ struct AddPlaceSheet: View {
         defer { searching = false }
         if text.hasPrefix("http") {
             let full = await NearbyService.expand(text)
+            if GoogleList.listID(in: full) != nil {
+                model.toast = await model.importGoogleList(text)
+                dismiss()
+                return
+            }
             if let c = MapsLink.coordinate(in: full) {
                 model.addManual(name: MapsLink.placeName(in: full) ?? "Shared place", at: c, note: note.isEmpty ? nil : note)
                 dismiss()
@@ -194,5 +203,45 @@ struct AddPlaceSheet: View {
         req.naturalLanguageQuery = text
         if let h = model.here { req.region = MKCoordinateRegion(center: h.cl, latitudinalMeters: 50_000, longitudinalMeters: 50_000) }
         results = (try? await MKLocalSearch(request: req).start().mapItems) ?? []
+    }
+}
+
+struct ListLinkSheet: View {
+    @Environment(AppModel.self) private var model
+    @Environment(\.dismiss) private var dismiss
+    @State private var link = ""
+    @State private var status: String?
+    @State private var working = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    TextField("https://maps.app.goo.gl/…", text: $link)
+                        .textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .font(ESFont.mono(13))
+                    Button("Paste") { link = UIPasteboard.general.string ?? link }
+                } footer: {
+                    Text("In Google Maps: Saved, open a list, Share, Copy link. The list has to be shared by link. Re-importing a list later adds new places and keeps your notes.")
+                }
+                if working { ProgressView() }
+                if let s = status { Text(s).font(ESFont.small) }
+            }
+            .navigationTitle("Import a list")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) { Button("Close") { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Import") {
+                        Task {
+                            working = true
+                            status = await model.importGoogleList(link)
+                            working = false
+                        }
+                    }
+                    .disabled(link.isEmpty || working)
+                }
+            }
+        }
     }
 }

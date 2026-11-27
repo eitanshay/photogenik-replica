@@ -171,6 +171,19 @@ final class LibraryTests: XCTestCase {
         XCTAssertTrue(lib.places[0].isResolved)
     }
 
+    func testUpsertManyMergesAndCounts() {
+        var lib = PlaceLibrary(places: [Place(id: "gmap:1", name: "Cafe A", coordinate: Coordinate(lat: 19.43, lng: -99.19), lists: ["Want to go"])])
+        let incoming = [
+            Place(id: "gmap:1", name: "Cafe A", coordinate: Coordinate(lat: 19.43, lng: -99.19), lists: ["Favorites"]),
+            Place(id: "gmap:2", name: "Taqueria", coordinate: Coordinate(lat: 19.41, lng: -99.18), lists: ["Favorites"]),
+            Place(name: "cafe a", coordinate: Coordinate(lat: 19.4301, lng: -99.19), lists: ["Coffee"])
+        ]
+        XCTAssertEqual(lib.upsertMany(incoming), 1)
+        XCTAssertEqual(lib.places.count, 2)
+        XCTAssertEqual(lib.places[0].lists, ["Want to go", "Favorites", "Coffee"])
+        XCTAssertEqual(lib.upsertMany(incoming), 0)
+    }
+
     func testPruneKeepsSavedAndMuted() {
         let home = Coordinate(lat: 37.44, lng: -122.14)
         let far = Coordinate(lat: 38.72, lng: -9.14)
@@ -542,5 +555,35 @@ final class GuideTests: XCTestCase {
     func testSunGoldenWindowExists() {
         let w = Sun.goldenWindow(from: Date(timeIntervalSince1970: 1_800_000_000), latitude: 38.7, longitude: -9.1)
         XCTAssertNotNil(w)
+    }
+}
+
+final class GoogleListTests: XCTestCase {
+    func testListIDFromBothURLForms() {
+        XCTAssertEqual(GoogleList.listID(in: "https://www.google.com/maps/placelists/list/11J2JiXPiaV0oQ2PdQ_evBLqMris?shh=CAE"), "11J2JiXPiaV0oQ2PdQ_evBLqMris")
+        XCTAssertEqual(GoogleList.listID(in: "https://www.google.com/maps/@/data=!3m1!4b1!4m2!11m1!2s1ZFTlgHwjRppM8Himf0_ZKXt4nsk!18m1!1e1?g_ep=x"), "1ZFTlgHwjRppM8Himf0_ZKXt4nsk")
+        XCTAssertNil(GoogleList.listID(in: "https://www.google.com/maps/place/Cafe/@1.5,2.5,17z"))
+    }
+
+    func testParseSyntheticResponse() {
+        let body = """
+        )]}'
+        [[["LISTID",3,[[1],[9]],1,1],4,[2,1,"u"],["Owner","p","1"],"Want to go","",null,null,[
+         [null,[null,null,"Cafe A, 1 Main St",null,"1 Main St, Mexico City",[null,null,19.43,-99.19],["-8803970307559093503","-1970343289966187788"],"/g/x"],"Cafe A","great flat white",null,null,null,[]],
+         [null,[null,null,"",null,"2 Side St",[null,null,19.41,-99.18],["1","42"]],"Taqueria B","",null],
+         [null,[null,null,"",null,"",null,null],"No Pin",""],
+         [null,null,"Broken"]
+        ]]]
+        """
+        let list = GoogleList.parse(Data(body.utf8))
+        XCTAssertEqual(list?.name, "Want to go")
+        XCTAssertEqual(list?.places.map(\.name), ["Cafe A", "Taqueria B", "No Pin"])
+        XCTAssertEqual(list?.places[0].note, "great flat white")
+        XCTAssertEqual(list?.places[0].coordinate?.lat ?? 0, 19.43, accuracy: 1e-9)
+        XCTAssertEqual(list?.places[0].url, "https://maps.google.com/?cid=16476400783743363828")
+        XCTAssertEqual(list?.places[1].id, "gmap:42")
+        XCTAssertNil(list?.places[2].coordinate)
+        XCTAssertEqual(list?.places[0].lists, ["Want to go"])
+        XCTAssertNil(GoogleList.parse(Data("<html>".utf8)))
     }
 }

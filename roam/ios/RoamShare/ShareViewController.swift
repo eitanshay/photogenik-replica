@@ -54,6 +54,16 @@ final class ShareViewController: UIViewController {
         if let u = url {
             let full = await Self.expand(u)
             finalURL = full
+            if GoogleList.listID(in: full) != nil || GoogleList.listID(in: u) != nil {
+                // A whole list: the app imports it (thousands of places) the next time it opens.
+                SharedInbox.append(Place(name: name ?? "Google Maps list", kind: .saved, source: .share,
+                                         lists: [GoogleList.marker], url: full))
+                await MainActor.run {
+                    state.message = "List sent to roam. Open roam to import all its places."
+                    state.done = true
+                }
+                return
+            }
             coord = MapsLink.coordinate(in: full)
             if name == nil { name = MapsLink.placeName(in: full) ?? MapsLink.queryText(in: full) }
         }
@@ -83,7 +93,9 @@ final class ShareViewController: UIViewController {
 
     static func expand(_ url: String) async -> String {
         guard MapsLink.isShortLink(url), let u = URL(string: url) else { return url }
-        guard let (_, resp) = try? await URLSession.shared.data(from: u), let final = resp.url?.absoluteString else { return url }
+        var r = URLRequest(url: u)
+        r.setValue(GoogleList.browserUserAgent, forHTTPHeaderField: "User-Agent")
+        guard let (_, resp) = try? await URLSession.shared.data(for: r), let final = resp.url?.absoluteString else { return url }
         return MapsLink.unwrapConsent(final)
     }
 }

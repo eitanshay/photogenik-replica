@@ -147,6 +147,7 @@ struct NearbyService {
         guard MapsLink.isShortLink(url), let u = URL(string: url) else { return url }
         var r = URLRequest(url: u)
         r.httpMethod = "GET"
+        r.setValue(GoogleList.browserUserAgent, forHTTPHeaderField: "User-Agent")
         guard let (_, resp) = try? await Net.session.data(for: r), let final = resp.url?.absoluteString else { return url }
         return MapsLink.unwrapConsent(final)
     }
